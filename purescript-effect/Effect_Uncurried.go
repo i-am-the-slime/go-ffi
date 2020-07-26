@@ -21,12 +21,13 @@ func init() {
 		}
 	}
 
-	exports["runEffectFn3"] = func(fn Any) Any {
+	exports["runEffectFn3"] = func(fn_ Any) Any {
 		return func(a Any) Any {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func() Any {
-						return Apply(fn, a, b, c)
+						fn := fn_.(Fn3)
+						return fn(a, b, c)
 					}
 				}
 			}
