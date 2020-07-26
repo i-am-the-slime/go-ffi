@@ -7,6 +7,12 @@ import (
 func init() {
 	exports := Foreign("Effect.Uncurried")
 
+	exports["mkEffectFn1"] = func(fn Any) Any {
+		return func(x Any) Any {
+			return Run(Apply(fn, x))
+		}
+	}
+
 	exports["runEffectFn1"] = func(fn Any) Any {
 		return func(a Any) Any {
 			return func() Any {
@@ -14,4 +20,5 @@ func init() {
 			}
 		}
 	}
+
 }
