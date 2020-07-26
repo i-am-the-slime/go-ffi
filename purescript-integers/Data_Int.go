@@ -2,8 +2,10 @@ package purescript_integers
 
 import (
 	"fmt"
-	. "github.com/purescript-native/go-runtime"
 	"math"
+	"strconv"
+
+	. "github.com/purescript-native/go-runtime"
 )
 
 func init() {
@@ -50,6 +52,22 @@ func init() {
 				return fmt.Sprintf("%x", i)
 			default:
 				panic(fmt.Sprintf("Unsupported radix (%d)", radix))
+			}
+		}
+	}
+
+	exports["fromStringAsImpl"] = func(just Any) Any {
+		return func(nothing Any) Any {
+			return func(radix_ Any) Any {
+				return func(s_ Any) Any {
+					radix := radix_.(int)
+					s := s_.(string)
+					res, err := strconv.ParseInt(s, 0, radix)
+					if err != nil {
+						return nothing
+					}
+					return Apply(just, res)
+				}
 			}
 		}
 	}
