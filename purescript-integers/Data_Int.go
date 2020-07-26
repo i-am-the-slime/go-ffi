@@ -1,9 +1,10 @@
 package purescript_integers
 
 import (
-	. "github.com/purescript-native/go-runtime"
 	"math"
 	"strconv"
+
+	. "github.com/purescript-native/go-runtime"
 )
 
 func init() {
@@ -66,6 +67,22 @@ func init() {
 	exports["toStringAs"] = func(radix Any) Any {
 		return func(i Any) Any {
 			return strconv.FormatInt(int64(i.(int)), radix.(int))
+		}
+	}
+
+	exports["fromStringAsImpl"] = func(just Any) Any {
+		return func(nothing Any) Any {
+			return func(radix_ Any) Any {
+				return func(s_ Any) Any {
+					radix := radix_.(int)
+					s := s_.(string)
+					res, err := strconv.ParseInt(s, 0, radix)
+					if err != nil {
+						return nothing
+					}
+					return Apply(just, res)
+				}
+			}
 		}
 	}
 
