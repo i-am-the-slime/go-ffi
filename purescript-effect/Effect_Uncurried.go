@@ -21,4 +21,16 @@ func init() {
 		}
 	}
 
+	exports["runEffectFn3"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func() Any {
+						return Apply(fn, a, b, c)
+					}
+				}
+			}
+		}
+	}
+
 }
