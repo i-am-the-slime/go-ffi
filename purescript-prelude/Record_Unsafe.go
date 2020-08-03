@@ -7,9 +7,20 @@ import (
 func init() {
 	exports := Foreign("Record.Unsafe")
 
+	exports["unsafeHas"] = func(label_ Any) Any {
+		return func(rec_ Any) Any {
+			rec := rec_.(Dict)
+			label := label_.(string)
+			_, ok := rec[label]
+			return ok
+		}
+	}
+
 	exports["unsafeGet"] = func(label_ Any) Any {
 		return func(rec_ Any) Any {
-			return rec_.(map[string]Any)[label_.(string)]
+			rec := rec_.(map[string]Any)
+			label := label_.(string)
+			return rec[label]
 		}
 	}
 
