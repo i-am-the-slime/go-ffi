@@ -9,8 +9,4 @@ func init() {
 		return Apply(f, nil)
 	}
 
-	exports["crashWith"] = func(msg Any) Any {
-		panic(msg)
-	}
-
 }
