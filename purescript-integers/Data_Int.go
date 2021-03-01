@@ -86,4 +86,20 @@ func init() {
 		}
 	}
 
+	exports["fromStringAsImpl"] = func(just Any) Any {
+		return func(nothing Any) Any {
+			return func(radix_ Any) Any {
+				return func(s_ Any) Any {
+					radix := radix_.(int)
+					s := s_.(string)
+					res, err := strconv.ParseInt(s, 0, radix)
+					if err != nil {
+						return nothing
+					}
+					return Apply(just, res)
+				}
+			}
+		}
+	}
+
 }
