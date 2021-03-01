@@ -2,14 +2,15 @@ package purescript_strings
 
 import (
 	"fmt"
-	. "github.com/purescript-native/go-runtime"
-	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/dlclark/regexp2"
+	. "github.com/purescript-native/go-runtime"
 )
 
 type regex_pair struct {
-	regex  *regexp.Regexp
+	regex  *regexp2.Regexp
 	global bool
 }
 
@@ -30,7 +31,7 @@ func init() {
 							flags = fmt.Sprintf("(?%s)", flags)
 						}
 					}
-					r, err := regexp.Compile(flags + s)
+					r, err := regexp2.Compile(flags + s)
 					if err == nil {
 						return Apply(right, regex_pair{r, global})
 					} else {
