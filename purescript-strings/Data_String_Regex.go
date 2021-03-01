@@ -31,7 +31,7 @@ func init() {
 							flags = fmt.Sprintf("(?%s)", flags)
 						}
 					}
-					r, err := regexp2.Compile(flags + s)
+					r, err := regexp2.Compile(flags+s, 0)
 					if err == nil {
 						return Apply(right, regex_pair{r, global})
 					} else {
