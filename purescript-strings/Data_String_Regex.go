@@ -14,6 +14,16 @@ type regex_pair struct {
 	global bool
 }
 
+func regexp2FindAllString(re *regexp2.Regexp, s string) []string {
+	var matches []string
+	m, _ := re.FindStringMatch(s)
+	for m != nil {
+		matches = append(matches, m.String())
+		m, _ = re.FindNextMatch(m)
+	}
+	return matches
+}
+
 func init() {
 	exports := Foreign("Data.String.Regex")
 
@@ -47,7 +57,8 @@ func init() {
 			p := p_.(regex_pair)
 			r := p.regex
 			s := s_.(string)
-			return r.MatchString(s)
+			_, result := r.MatchString(s)
+			return result
 		}
 	}
 
