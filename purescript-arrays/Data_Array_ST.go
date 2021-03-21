@@ -8,7 +8,7 @@ func init() {
 
 	exports := Foreign("Data.Array.ST")
 
-	exports["empty"] = func() Any {
+	exports["new"] = func() Any {
 		return new([]Any)
 	}
 
