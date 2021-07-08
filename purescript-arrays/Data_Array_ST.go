@@ -83,4 +83,12 @@ func init() {
 		}
 	}
 
+	exports["any"] = func(xs_ Any) Any {
+		return func() Any {
+			xs := xs_.([]Any)
+			result := append([]Any{}, xs...)
+			return &result
+		}
+	}
+
 }

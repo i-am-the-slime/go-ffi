@@ -92,7 +92,7 @@ func init() {
 	// Non-indexed reads -----------------------------------------------------------
 	//------------------------------------------------------------------------------
 
-	exports["uncons'"] = func(empty_ Any) Any {
+	exports["unconsImpl"] = func(empty_ Any) Any {
 		return func(next Any) Any {
 			return func(xs_ Any) Any {
 				empty, xs := empty_.(Fn), xs_.([]Any)
