@@ -29,10 +29,23 @@ func init() {
 		}
 	}
 
+	exports["mkFn6"] = func(fn Any) Any {
+		return func(a Any, b Any, c Any, d Any, e Any, f Any) Any {
+			return Apply(fn, a, b, c, d, e, f)
+		}
+	}
+
+	exports["mkFn7"] = func(fn Any) Any {
+		return func(a Any, b Any, c Any, d Any, e Any, f Any, g Any) Any {
+			return Apply(fn, a, b, c, d, e, f, g)
+		}
+	}
+
 	exports["runFn2"] = func(fn Any) Any {
 		return func(a Any) Any {
 			return func(b Any) Any {
-				return Apply(fn, a, b)
+				f := fn.(Fn2)
+				return f(a, b)
 			}
 		}
 	}
@@ -53,7 +66,8 @@ func init() {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func(d Any) Any {
-						return Apply(fn,a, b, c, d)
+						f := fn.(Fn4)
+						return f(a, b, c, d)
 					}
 				}
 			}
@@ -66,12 +80,32 @@ func init() {
 				return func(c Any) Any {
 					return func(d Any) Any {
 						return func(e Any) Any {
-							return Apply(fn, a,b,c,d,e)
+							f := fn.(Fn5)
+							return f(a, b, c, d, e)
 						}
 					}
 				}
 			}
 		}
 	}
+	
+	exports["runFn6"] = func(fn Any) Any {
+		return func(a Any) Any {
+
+		return func(b Any) Any {
+			return func(c Any) Any {
+				return func(d Any) Any {
+					return func(e Any) Any {
+						return func(f Any) Any {
+							g := fn.(Fn6)
+							return g(a, b, c, d, e, f)
+						}
+					}
+				}
+			}
+		}
+	}
+    }
+	
 
 }
