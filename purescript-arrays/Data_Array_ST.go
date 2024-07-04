@@ -61,6 +61,10 @@ func init() {
 		}
 	}
 
+	exports["unsafeFreezeImpl"] = func(xs Any) Any {
+		return xs
+	}
+
 	exports["unsafeThaw"] = func(xs_ Any) Any {
 		return func() Any {
 			xs := xs_.([]Any)
