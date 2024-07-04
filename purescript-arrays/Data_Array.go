@@ -193,15 +193,14 @@ func init() {
 	}
 
 	exports["_updateAt"] = func(just_ Any, nothing Any, i_ Any, a Any, xs_ Any) Any {
-						just, i, xs := just_.(Fn), i_.(int), xs_.([]Any)
-						if i < 0 || i >= len(xs) {
-							return nothing
-						}
-						ys := make([]Any, len(xs))
-						copy(ys, xs)
-						ys[i] = a
-						return just(ys)
-					}
+		just, i, xs := just_.(Fn), i_.(int), xs_.([]Any)
+		if i < 0 || i >= len(xs) {
+			return nothing
+		}
+		ys := make([]Any, len(xs))
+		copy(ys, xs)
+		ys[i] = a
+		return just(ys)
 	}
 
 	//------------------------------------------------------------------------------
