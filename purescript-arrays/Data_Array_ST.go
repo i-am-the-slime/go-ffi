@@ -54,6 +54,11 @@ func init() {
 		}
 	}
 
+
+	exports["push"] = func(a Any, xs Any) Any {
+		return append(xs.([]Any), a
+	}
+
 	exports["unsafeFreeze"] = func(xs_ Any) Any {
 		return func() Any {
 			xs := xs_.(*[]Any)
