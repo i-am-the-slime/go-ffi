@@ -10,7 +10,7 @@ func init() {
 	exports["runSTFn1"] = func(fn Any) Any {
 		return func(a Any) Any {
 			return func() Any {
-				Run(Apply(fn, a))
+				return Run(Apply(fn, a))
 			}
 		}
 	}
