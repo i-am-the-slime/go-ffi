@@ -13,6 +13,66 @@ func init() {
 		}
 	}
 
+	exports["mkEffectFn2"] = func(fn Any) Any {
+		return func(x Any) Any {
+			return func(y Any) Any {
+				return Run(Apply(Apply(fn, x), y))
+			}
+		}
+	}
+
+	exports["mkEffectFn3"] = func(fn Any) Any {
+		return func(x Any) Any {
+			return func(y Any) Any {
+				return func(z Any) Any {
+					return Run(Apply(Apply(Apply(fn, x), y), z))
+				}
+			}
+		}
+	}
+
+	exports["mkEffectFn4"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func(d Any) Any {
+						return Run(Apply(Apply(Apply(Apply(fn, a), b), c), d))
+					}
+				}
+			}
+		}
+	}
+
+	exports["mkEffectFn5"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func(d Any) Any {
+						return func(e Any) Any {
+							return Run(Apply(Apply(Apply(Apply(Apply(fn, a), b), c), d), e))
+						}
+					}
+				}
+			}
+		}
+	}
+
+	exports["mkEffectFn6"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func(d Any) Any {
+						return func(e Any) Any {
+							return func(f Any) Any {
+								return Run(Apply(Apply(Apply(Apply(Apply(Apply(fn, a), b), c), d), e), f))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
 	exports["runEffectFn1"] = func(fn Any) Any {
 		return func(a Any) Any {
 			return func() Any {
