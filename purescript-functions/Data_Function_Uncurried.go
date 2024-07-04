@@ -41,7 +41,8 @@ func init() {
 		return func(a Any) Any {
 			return func(b Any) Any {
 				return func(c Any) Any {
-					return Apply(fn, a, b, c)
+					f := fn.(Fn3)
+					return f(a, b, c)
 				}
 			}
 		}
