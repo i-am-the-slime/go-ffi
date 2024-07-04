@@ -19,7 +19,7 @@ func init() {
 
 	exports["mkFn4"] = func(fn Any) Any {
 		return func(a Any, b Any, c Any, d Any) Any {
-			return fn(a)(b)(c)(d)
+			return Apply(fn, a, b, c, d)
 		}
 	}
 
