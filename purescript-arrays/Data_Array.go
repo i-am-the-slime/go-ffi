@@ -108,19 +108,13 @@ func init() {
 	// Indexed operations ----------------------------------------------------------
 	//------------------------------------------------------------------------------
 
-	exports["indexImpl"] = func(just Any) Any {
-		return func(nothing Any) Any {
-			return func(xs_ Any) Any {
-				return func(i_ Any) Any {
-					xs := xs_.([]Any)
-					i := i_.(int)
-					if i < 0 || i >= len(xs) {
-						return nothing
-					}
-					return Apply(just, xs[i])
-				}
-			}
+	exports["indexImpl"] = func(just Any, nothing Any, xs_ Any, i_ Any) Any {
+		xs := xs_.([]Any)
+		i := i_.(int)
+		if i < 0 || i >= len(xs) {
+			return nothing
 		}
+		return Apply(just, xs[i])
 	}
 
 	exports["findIndexImpl"] = func(just_ Any) Any {
