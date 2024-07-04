@@ -192,11 +192,7 @@ func init() {
 		}
 	}
 
-	exports["_updateAt"] = func(just_ Any) Any {
-		return func(nothing Any) Any {
-			return func(i_ Any) Any {
-				return func(a Any) Any {
-					return func(xs_ Any) Any {
+	exports["_updateAt"] = func(just_ Any, nothing Any, i_ Any, a Any, xs_ Any) Any {
 						just, i, xs := just_.(Fn), i_.(int), xs_.([]Any)
 						if i < 0 || i >= len(xs) {
 							return nothing
@@ -206,9 +202,6 @@ func init() {
 						ys[i] = a
 						return just(ys)
 					}
-				}
-			}
-		}
 	}
 
 	//------------------------------------------------------------------------------
