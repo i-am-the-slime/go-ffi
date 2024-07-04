@@ -55,7 +55,7 @@ func init() {
 	}
 
 
-	exports["push"] = func(a Any, xs Any) Any {
+	exports["pushImpl"] = func(a Any, xs Any) Any {
 		return append(xs.([]Any), a)
 	}
 
