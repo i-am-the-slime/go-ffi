@@ -30,8 +30,12 @@ func init() {
 	}
 
 	exports["runFn2"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
 				f := fn.(Fn2)
 				return f(a, b)
+			}
+		}
 	}
 
 	exports["runFn3"] = func(fn Any) Any {
