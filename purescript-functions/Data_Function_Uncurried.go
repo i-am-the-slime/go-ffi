@@ -66,8 +66,7 @@ func init() {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func(d Any) Any {
-						f := fn.(Fn4)
-						return f(a, b, c, d)
+						return Apply(f,a, b, c, d)
 					}
 				}
 			}
