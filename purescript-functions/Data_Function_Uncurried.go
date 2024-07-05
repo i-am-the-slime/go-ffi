@@ -88,24 +88,42 @@ func init() {
 			}
 		}
 	}
-	
+
 	exports["runFn6"] = func(fn Any) Any {
 		return func(a Any) Any {
 
-		return func(b Any) Any {
-			return func(c Any) Any {
-				return func(d Any) Any {
-					return func(e Any) Any {
-						return func(f Any) Any {
-							g := fn.(Fn6)
-							return g(a, b, c, d, e, f)
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func(d Any) Any {
+						return func(e Any) Any {
+							return func(f Any) Any {
+								g := fn.(Fn6)
+								return g(a, b, c, d, e, f)
+							}
 						}
 					}
 				}
 			}
 		}
 	}
-    }
-	
+
+	exports["runFn7"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func(d Any) Any {
+						return func(e Any) Any {
+							return func(f Any) Any {
+								return func(g Any) Any {
+									h := fn.(Fn7)
+									return h(a, b, c, d, e, f, g)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
 
 }
