@@ -1,8 +1,9 @@
 package purescript_strings
 
 import (
-	. "github.com/purescript-native/go-runtime"
 	"unicode/utf8"
+
+	. "github.com/purescript-native/go-runtime"
 )
 
 func init() {

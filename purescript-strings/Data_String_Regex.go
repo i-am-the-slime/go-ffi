@@ -69,7 +69,7 @@ func init() {
 					p := p_.(regex_pair)
 					r := p.regex
 					s := s_.(string)
-					ms := r.FindAllString(s, -1)
+					ms := regexp2FindAllString(r, s)
 					if ms == nil {
 						return nothing
 					}
@@ -98,14 +98,12 @@ func init() {
 				s2 := s2_.(string)
 
 				if global {
-					return r.ReplaceAllString(s2, s1)
+					result, _ := r.Replace(s2, s1, -1, -1)
+					return result
 				}
 
-				found := r.FindString(s2)
-				if found != "" {
-					return strings.Replace(s2, found, s1, 1)
-				}
-				return s2
+				result, _ := r.Replace(s2, s1, -1, 1)
+				return result
 			}
 		}
 	}
@@ -118,26 +116,23 @@ func init() {
 				global := p.global
 				s := s_.(string)
 
-				all := r.FindAllString(s, -1)
+				all := regexp2FindAllString(r, s)
 				submatches := make([]Any, 0, len(all))
 				for _, submatch := range all {
 					submatches = append(submatches, submatch)
 				}
 
-				frepl := func(str string) string {
-					return Apply(f, str, submatches).(string)
+				frepl := func(str regexp2.Match) string {
+					return Apply(f, str.String(), submatches).(string)
 				}
 
 				if global {
-					return r.ReplaceAllStringFunc(s, frepl)
+					result, _ := r.ReplaceFunc(s, frepl, -1, -1)
+					return result
 				}
 
-				found := r.FindString(s)
-				if found != "" {
-					fmt.Println(r.ReplaceAllStringFunc(s, frepl))
-					return strings.Replace(s, found, frepl(r.String()), 1)
-				}
-				return s
+				result, _ := r.ReplaceFunc(s, frepl, -1, 1)
+				return result
 			}
 		}
 	}
@@ -149,12 +144,12 @@ func init() {
 					p := p_.(regex_pair)
 					r := p.regex
 					s := s_.(string)
-					found := r.FindStringIndex(s)
-					if found == nil {
+					foundMatch, _ := r.FindStringMatch(s)
+					if foundMatch == nil {
 						return nothing
 					}
 					// TODO: is there a way to do this that is faster?
-					return Apply(just, utf8.RuneCountInString(s[:found[0]]))
+					return Apply(just, utf8.RuneCountInString(s[:foundMatch.String()[0]]))
 				}
 			}
 		}
@@ -162,14 +157,7 @@ func init() {
 
 	exports["split"] = func(p_ Any) Any {
 		return func(s_ Any) Any {
-			p := p_.(regex_pair)
-			r := p.regex
-			s := s_.(string)
-			ss := r.Split(s, -1)
-			result := make([]Any, 0, len(ss))
-			for _, str := range ss {
-				result = append(result, str)
-			}
+			panic("Not implemented")
 			return result
 		}
 	}
