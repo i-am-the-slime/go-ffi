@@ -158,7 +158,7 @@ func init() {
 	exports["split"] = func(p_ Any) Any {
 		return func(s_ Any) Any {
 			panic("Not implemented")
-			return result
+			return nil
 		}
 	}
 }
