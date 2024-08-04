@@ -226,20 +226,18 @@ func init() {
 	// Subarrays -------------------------------------------------------------------
 	//------------------------------------------------------------------------------
 
-	exports["slice"] = func(s_ Any, e_ Any) Any {
-		return func(l_ Any) Any {
-			s := s_.(int)
-			e := e_.(int)
-			l := l_.([]Any)
-			sz := len(l)
-			if s < 0 {
-				s = sz + s
-			}
-			if e < 0 {
-				e = sz + e
-			}
-			return l[s:e]
+	exports["sliceImpl"] = func(s_ Any, e_ Any, l_ Any) Any {
+		s := s_.(int)
+		e := e_.(int)
+		l := l_.([]Any)
+		sz := len(l)
+		if s < 0 {
+			s = sz + s
 		}
+		if e < 0 {
+			e = sz + e
+		}
+		return l[s:e]
 	}
 
 	exports["take"] = func(n_ Any, l_ Any) Any {
