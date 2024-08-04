@@ -5,10 +5,19 @@ import . "github.com/purescript-native/go-runtime"
 func init() {
 	exports := Foreign("Effect.Ref")
 
-	exports["new"] = func(val Any) Any {
+	exports["_new"] = func(val Any) Any {
 		return func() Any {
 			ptr := new(Any)
 			*ptr = val
+			return ptr
+		}
+	}
+
+	exports["newWithSelf"] = func(f Any) Any {
+		return func() Any {
+			ptr := new(Any)
+			*ptr = nil
+			ptr = Apply(f, ptr).(*Any)
 			return ptr
 		}
 	}
@@ -20,7 +29,7 @@ func init() {
 		}
 	}
 
-	exports["modify'"] = func(f Any) Any {
+	exports["modifyImpl"] = func(f Any) Any {
 		return func(ref_ Any) Any {
 			return func() Any {
 				ref := ref_.(*Any)
