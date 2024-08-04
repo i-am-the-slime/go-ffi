@@ -182,7 +182,7 @@ func init() {
 		return result
 	}
 
-	exports["filter"] = func(f_ Any, xs_ Any) Any {
+	exports["filterImpl"] = func(f_ Any, xs_ Any) Any {
 		xs, f := xs_.([]Any), f_.(Fn)
 		result := []Any{}
 		for _, x := range xs {
