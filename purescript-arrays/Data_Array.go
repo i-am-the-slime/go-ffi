@@ -231,12 +231,25 @@ func init() {
 		e := e_.(int)
 		l := l_.([]Any)
 		sz := len(l)
+		// Adjust negative indices
 		if s < 0 {
 			s = sz + s
 		}
 		if e < 0 {
 			e = sz + e
 		}
+
+		// Ensure indices are within bounds
+		if s < 0 {
+			s = 0
+		}
+		if e > sz {
+			e = sz
+		}
+		if s > e {
+			s = e
+		}
+
 		return l[s:e]
 	}
 
@@ -249,14 +262,6 @@ func init() {
 			return l
 		}
 		return l[:n]
-	}
-
-	exports["drop"] = func(n_ Any, l_ Any) Any {
-		n, l := n_.(int), l_.([]Any)
-		if n < 1 {
-			return l
-		}
-		return l[n:]
 	}
 
 	//------------------------------------------------------------------------------
