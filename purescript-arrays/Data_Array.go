@@ -256,9 +256,6 @@ func init() {
 		if n < 1 {
 			return l
 		}
-		if n > len(l) {
-			return []Any{}
-		}
 		return l[n:]
 	}
 
