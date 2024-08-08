@@ -8,7 +8,7 @@ import (
 )
 
 func init() {
-	exports := Foreign("Number")
+	exports := Foreign("Data.Number")
 
 	exports["nan"] = func() Any {
 		return math.NaN()
