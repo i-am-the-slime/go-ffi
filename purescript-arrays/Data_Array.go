@@ -222,6 +222,19 @@ func init() {
 		}
 	}
 
+	// foreign import sortByImpl :: forall a. Fn3 (a -> a -> Ordering) (Ordering -> Int) (Array a) (Array a)
+	exports["sortByImpl"] = func(orderingFn_, orderingToInt_, l_ Any) Any {
+		orderingFn := orderingFn_.(Fn)
+		orderingToInt := orderingToInt_.(Fn)
+		l := l_.([]Any)
+		xs := make([]Any, len(l))
+		copy(xs, l)
+		sort.SliceStable(xs, func(i int, j int) bool {
+			return Apply(orderingToInt(Apply(orderingFn, xs[i], xs[j]))).(int) < 0
+		})
+		return xs
+	}
+
 	//------------------------------------------------------------------------------
 	// Subarrays -------------------------------------------------------------------
 	//------------------------------------------------------------------------------
