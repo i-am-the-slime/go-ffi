@@ -41,7 +41,7 @@ func init() {
 					just := just_.(Fn)
 					i, err := strconv.ParseInt(s.(string), radix.(int), 32)
 					if err == nil {
-						return just(i)
+						return just(int32(i))
 					} else {
 						return nothing
 					}
