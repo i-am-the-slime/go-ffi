@@ -28,6 +28,12 @@ func init() {
 		}
 	}
 
+	// foreign import fromStringAsImpl
+	//   :: (forall a. a -> Maybe a)
+	//   -> (forall a. Maybe a)
+	//   -> Radix
+	//   -> String
+	//   -> Maybe Int
 	exports["fromStringAsImpl"] = func(just_ Any) Any {
 		return func(nothing Any) Any {
 			return func(radix Any) Any {
@@ -35,7 +41,7 @@ func init() {
 					just := just_.(Fn)
 					i, err := strconv.ParseInt(s.(string), radix.(int), 32)
 					if err == nil {
-						return just(int(i))
+						return just(i)
 					} else {
 						return nothing
 					}
@@ -67,38 +73,6 @@ func init() {
 	exports["toStringAs"] = func(radix Any) Any {
 		return func(i Any) Any {
 			return strconv.FormatInt(int64(i.(int)), radix.(int))
-		}
-	}
-
-	exports["fromStringAsImpl"] = func(just Any) Any {
-		return func(nothing Any) Any {
-			return func(radix_ Any) Any {
-				return func(s_ Any) Any {
-					radix := radix_.(int)
-					s := s_.(string)
-					res, err := strconv.ParseInt(s, 0, radix)
-					if err != nil {
-						return nothing
-					}
-					return Apply(just, res)
-				}
-			}
-		}
-	}
-
-	exports["fromStringAsImpl"] = func(just Any) Any {
-		return func(nothing Any) Any {
-			return func(radix_ Any) Any {
-				return func(s_ Any) Any {
-					radix := radix_.(int)
-					s := s_.(string)
-					res, err := strconv.ParseInt(s, 0, radix)
-					if err != nil {
-						return nothing
-					}
-					return Apply(just, res)
-				}
-			}
 		}
 	}
 
