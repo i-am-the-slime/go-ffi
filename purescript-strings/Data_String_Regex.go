@@ -157,8 +157,20 @@ func init() {
 
 	exports["split"] = func(p_ Any) Any {
 		return func(s_ Any) Any {
-			panic("Not implemented")
-			return nil
+			p := p_.(regex_pair)
+			r := p.regex
+			s := s_.(string)
+			matches, _ := r.FindStringMatch(s)
+			var result []string
+			lastIndex := 0
+			for matches != nil {
+				result = append(result, s[lastIndex:matches.Index])
+				lastIndex = matches.Index + matches.Length
+				matches, _ = r.FindNextMatch(matches)
+			}
+			result = append(result, s[lastIndex:])
+			return result
 		}
 	}
+
 }
