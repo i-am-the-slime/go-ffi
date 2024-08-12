@@ -160,9 +160,9 @@ func init() {
 			p := p_.(regex_pair)
 			r := p.regex
 			s := s_.(string)
-			matches, _ := r.FindStringMatch(s)
 			var result []Any
 			lastIndex := 0
+			matches, _ := r.FindStringMatch(s)
 			for matches != nil {
 				result = append(result, s[lastIndex:matches.Index])
 				lastIndex = matches.Index + matches.Length
