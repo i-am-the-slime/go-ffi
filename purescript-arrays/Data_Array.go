@@ -47,6 +47,19 @@ func init() {
 		return arr
 	}
 
+	// foreign import replicateImpl :: forall a. Fn2 Int a (Array a)
+	exports["replicateImpl"] = func(count_ Any, value Any) Any {
+		var count = count_.(int)
+		if count < 1 {
+			return []Any{}
+		}
+		var arr = make([]Any, count)
+		for i := range arr {
+			arr[i] = value
+		}
+		return arr
+	}
+
 	exports["fromFoldableImpl"] = func(foldr Any, foldable Any) Any {
 		var f = func(x Any) Any {
 			return func(acc Any) Any {
