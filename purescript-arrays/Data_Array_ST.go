@@ -30,7 +30,8 @@ func init() {
 
 	exports["thawImpl"] = func(xs_ Any) Any {
 		xs := xs_.([]Any)
-		result := append([]Any{}, xs...)
+		result := make([]Any, len(xs))
+		copy(result, xs)
 		return &result
 	}
 
