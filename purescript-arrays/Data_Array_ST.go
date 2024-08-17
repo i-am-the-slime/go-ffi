@@ -28,6 +28,11 @@ func init() {
 		}
 	}
 
+	exports["thawImpl"] = func(xs Any) Any {
+		array := xs.([]Any)
+		return append([]Any{}, array...)
+	}
+
 	exports["poke"] = func(i_ Any) Any {
 		return func(a Any) Any {
 			return func(xs_ Any) Any {
@@ -53,7 +58,6 @@ func init() {
 			}
 		}
 	}
-
 
 	exports["pushImpl"] = func(a Any, xs Any) Any {
 		return append(xs.([]Any), a)
