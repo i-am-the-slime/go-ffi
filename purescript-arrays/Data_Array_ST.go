@@ -32,7 +32,7 @@ func init() {
 		xs := xs_.([]Any)
 		result := make([]Any, len(xs))
 		copy(result, xs)
-		return &result
+		return result
 	}
 
 	exports["poke"] = func(i_ Any) Any {
