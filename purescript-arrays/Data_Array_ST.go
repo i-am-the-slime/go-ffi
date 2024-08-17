@@ -29,10 +29,10 @@ func init() {
 	}
 
 	exports["thawImpl"] = func(xs_ Any) Any {
-		xs := xs_.([]Any)
-		result := make([]Any, len(xs))
-		copy(result, xs)
-		return result
+		xs := xs_.(*[]Any)
+		result := make([]Any, len(*xs))
+		copy(result, *xs)
+		return &result
 	}
 
 	exports["poke"] = func(i_ Any) Any {
