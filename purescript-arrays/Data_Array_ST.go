@@ -28,6 +28,7 @@ func init() {
 		}
 	}
 
+	// foreign import thawImpl :: forall h a. STFn1 (Array a) h (STArray h a)
 	exports["thawImpl"] = func(xs_ Any) Any {
 		xs := xs_.([]Any)
 		result := make([]Any, len(xs))
@@ -98,12 +99,15 @@ func init() {
 		}
 	}
 
-	exports["any"] = func(xs_ Any) Any {
-		return func() Any {
-			xs := xs_.([]Any)
-			result := append([]Any{}, xs...)
-			return &result
+	// Fn2 (a -> Boolean) (Array a) Boolean
+	exports["anyImpl"] = func(filter, xs_ Any) Any {
+		xs := xs_.([]Any)
+		for i := 0; i < len(xs); i++ {
+			if Apply(filter, xs[i]).(bool) {
+				return true
+			}
 		}
+		return false
 	}
 
 }
