@@ -99,15 +99,12 @@ func init() {
 		}
 	}
 
-	// Fn2 (a -> Boolean) (Array a) Boolean
-	exports["anyImpl"] = func(filter, xs_ Any) Any {
-		xs := xs_.([]Any)
-		for i := 0; i < len(xs); i++ {
-			if Apply(filter, xs[i]).(bool) {
-				return true
-			}
+	exports["any"] = func(xs_ Any) Any {
+		return func() Any {
+			xs := xs_.([]Any)
+			result := append([]Any{}, xs...)
+			return &result
 		}
-		return false
 	}
 
 }
