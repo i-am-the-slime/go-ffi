@@ -73,11 +73,12 @@ func init() {
 	}
 
 	exports["runSTFn1"] = func(fn Any) Any {
-		return func(a Any) Any {
+		fun := func(a Any) Any {
 			return func() Any {
 				return Apply(fn, a)
 			}
 		}
+		return &fun
 	}
 
 	exports["runSTFn2"] = func(fn_ Any) Any {
