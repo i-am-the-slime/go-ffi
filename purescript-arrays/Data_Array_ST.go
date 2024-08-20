@@ -30,9 +30,9 @@ func init() {
 
 	// foreign import thawImpl :: forall h a. STFn1 (Array a) h (STArray h a)
 	exports["thawImpl"] = func(xs_ Any) Any {
-		xs := xs_.([]Any)
-		result := make([]Any, len(xs))
-		copy(result, xs)
+		xs := xs_.(*[]Any)
+		result := make([]Any, len(*xs))
+		copy(result, *xs)
 		return &result
 	}
 
