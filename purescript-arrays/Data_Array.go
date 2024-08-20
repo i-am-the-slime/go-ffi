@@ -128,6 +128,23 @@ func init() {
 		return nothing
 	}
 
+	// export const findMapImpl = function (nothing, isJust, f, xs) {
+	// 	for (var i = 0; i < xs.length; i++) {
+	// 	  var result = f(xs[i]);
+	// 	  if (isJust(result)) return result;
+	// 	}
+	// 	return nothing;
+	//   };
+	exports["findMapImpl"] = func(nothing Any, isJust Any, f Any, xs Any) Any {
+		for _, x := range xs.([]Any) {
+			result := Apply(f, x)
+			if Apply(isJust, result).(bool) {
+				return result
+			}
+		}
+		return nothing
+	}
+
 	exports["findLastIndexImpl"] = func(just_ Any, nothing Any, f_ Any, xs_ Any) Any {
 		xs, f, just := xs_.([]Any), f_.(Fn), just_.(Fn)
 		for i := len(xs) - 1; i >= 0; i-- {
