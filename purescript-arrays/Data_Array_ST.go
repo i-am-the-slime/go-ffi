@@ -62,8 +62,9 @@ func init() {
 		}
 	}
 
-	exports["pushImpl"] = func(a Any, xs Any) Any {
-		return append(xs.([]Any), a)
+	exports["pushImpl"] = func(a Any, xs_ Any) Any {
+		xs := xs_.(*[]Any)
+		return append(*xs, a)
 	}
 
 	exports["unsafeFreeze"] = func(xs_ Any) Any {
