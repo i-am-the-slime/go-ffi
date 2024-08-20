@@ -82,17 +82,18 @@ func init() {
 	}
 
 	exports["runSTFn2"] = func(fn_ Any) Any {
-		return func(a Any) Any {
+		fun := func(a Any) Any {
 			return func(b Any) Any {
 				return func() Any {
 					return fn_.(Fn2)(a, b)
 				}
 			}
 		}
+		return &fun
 	}
 
 	exports["runSTFn3"] = func(fn_ Any) Any {
-		return func(a Any) Any {
+		fun := func(a Any) Any {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func() Any {
@@ -102,10 +103,11 @@ func init() {
 				}
 			}
 		}
+		return &fun
 	}
 
 	exports["runSTFn4"] = func(fn_ Any) Any {
-		return func(a Any) Any {
+		fun := func(a Any) Any {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func(d Any) Any {
@@ -117,10 +119,11 @@ func init() {
 				}
 			}
 		}
+		return &fun
 	}
 
 	exports["runSTFn5"] = func(fn_ Any) Any {
-		return func(a Any) Any {
+		fun := func(a Any) Any {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func(d Any) Any {
@@ -134,10 +137,11 @@ func init() {
 				}
 			}
 		}
+		return &fun
 	}
 
 	exports["runSTFn6"] = func(fn_ Any) Any {
-		return func(a Any) Any {
+		fun := func(a Any) Any {
 			return func(b Any) Any {
 				return func(c Any) Any {
 					return func(d Any) Any {
@@ -153,6 +157,7 @@ func init() {
 				}
 			}
 		}
+		return &fun
 	}
 
 	exports["runSTFn7"] = func(fn_ Any) Any {
