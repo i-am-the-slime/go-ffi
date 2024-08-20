@@ -90,7 +90,8 @@ func init() {
 		l := l_.([]Any)
 		xs := make([]Any, len(l), len(l)+1)
 		copy(xs, l)
-		return append(xs, e)
+		res := append(xs, e)
+		return res
 	}
 
 	//------------------------------------------------------------------------------
