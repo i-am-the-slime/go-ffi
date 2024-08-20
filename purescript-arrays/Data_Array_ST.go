@@ -17,9 +17,9 @@ func init() {
 			return func(i_ Any) Any {
 				return func(xs_ Any) Any {
 					return func() Any {
-						just, i, xs := just_.(Fn), i_.(int), xs_.(*[]Any)
-						if i >= 0 && i < len(*xs) {
-							return just((*xs)[i])
+						just, i, xs := just_.(Fn), i_.(int), xs_.([]Any)
+						if i >= 0 && i < len(xs) {
+							return just((xs)[i])
 						}
 						return nothing
 					}
@@ -40,10 +40,10 @@ func init() {
 		return func(a Any) Any {
 			return func(xs_ Any) Any {
 				return func() Any {
-					i, xs := i_.(int), xs_.(*[]Any)
-					result := i >= 0 && i < len(*xs)
+					i, xs := i_.(int), xs_.([]Any)
+					result := i >= 0 && i < len(xs)
 					if result {
-						(*xs)[i] = a
+						(xs)[i] = a
 					}
 					return result
 				}
@@ -55,22 +55,22 @@ func init() {
 		return func(xs_ Any) Any {
 			return func() Any {
 				as := as_.([]Any)
-				xs := xs_.(*[]Any)
-				*xs = append(*xs, as...)
-				return len(*xs)
+				xs := xs_.([]Any)
+				xs = append(xs, as...)
+				return len(xs)
 			}
 		}
 	}
 
 	exports["pushImpl"] = func(a Any, xs_ Any) Any {
-		xs := xs_.(*[]Any)
-		return append(*xs, a)
+		xs := xs_.([]Any)
+		return append(xs, a)
 	}
 
 	exports["unsafeFreeze"] = func(xs_ Any) Any {
 		return func() Any {
-			xs := xs_.(*[]Any)
-			return *xs
+			xs := xs_.([]Any)
+			return xs
 		}
 	}
 
@@ -87,8 +87,8 @@ func init() {
 
 	exports["freeze"] = func(xs_ Any) Any {
 		return func() Any {
-			xs := xs_.(*[]Any)
-			return append([]Any{}, *xs...)
+			xs := xs_.([]Any)
+			return append([]Any{}, xs...)
 		}
 	}
 
