@@ -9,7 +9,8 @@ func init() {
 	exports := Foreign("Data.Array.ST")
 
 	exports["new"] = func() Any {
-		return new([]Any)
+		result := make([]Any, 0)
+		return result
 	}
 
 	exports["peekImpl"] = func(just_ Any) Any {
@@ -33,7 +34,7 @@ func init() {
 		xs := xs_.([]Any)
 		result := make([]Any, len(xs))
 		copy(result, xs)
-		return &result
+		return result
 	}
 
 	exports["poke"] = func(i_ Any) Any {
@@ -64,7 +65,9 @@ func init() {
 
 	exports["pushImpl"] = func(a Any, xs_ Any) Any {
 		xs := xs_.([]Any)
-		return append(xs, a)
+		result := append(xs, a)
+		xs = result
+		return len(result)
 	}
 
 	exports["unsafeFreeze"] = func(xs_ Any) Any {
@@ -81,7 +84,7 @@ func init() {
 	exports["unsafeThaw"] = func(xs_ Any) Any {
 		return func() Any {
 			xs := xs_.([]Any)
-			return &xs
+			return xs
 		}
 	}
 
@@ -96,7 +99,7 @@ func init() {
 		return func() Any {
 			xs := xs_.([]Any)
 			result := append([]Any{}, xs...)
-			return &result
+			return result
 		}
 	}
 
@@ -104,7 +107,7 @@ func init() {
 		return func() Any {
 			xs := xs_.([]Any)
 			result := append([]Any{}, xs...)
-			return &result
+			return result
 		}
 	}
 

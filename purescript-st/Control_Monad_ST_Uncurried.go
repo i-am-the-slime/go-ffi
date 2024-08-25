@@ -1,6 +1,8 @@
 package purescript_st
 
 import (
+	"fmt"
+
 	. "github.com/purescript-native/go-runtime"
 )
 
@@ -84,6 +86,9 @@ func init() {
 		return func(a Any) Any {
 			return func(b Any) Any {
 				return func() Any {
+					fmt.Printf("runSTFn2 %t\n", fn_)
+					fmt.Printf("a %s\n", a)
+					fmt.Printf("b %s\n", b)
 					return fn_.(Fn2)(a, b)
 				}
 			}
