@@ -4,36 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"reflect"
+
 	"time"
 
 	. "github.com/purescript-native/go-runtime"
 )
-
-var (
-	Info = Teal
-	Warn = Yellow
-	Fata = Red
-)
-
-var (
-	Black   = Color("\033[1;30m%s\033[0m")
-	Red     = Color("\033[1;31m%s\033[0m")
-	Green   = Color("\033[1;32m%s\033[0m")
-	Yellow  = Color("\033[1;33m%s\033[0m")
-	Purple  = Color("\033[1;34m%s\033[0m")
-	Magenta = Color("\033[1;35m%s\033[0m")
-	Teal    = Color("\033[1;36m%s\033[0m")
-	White   = Color("\033[1;37m%s\033[0m")
-)
-
-func Color(colorString string) func(...interface{}) string {
-	sprint := func(args ...interface{}) string {
-		return fmt.Sprintf(colorString,
-			fmt.Sprint(args...))
-	}
-	return sprint
-}
 
 // Pure a
 type Pure struct {
@@ -41,18 +16,10 @@ type Pure struct {
 	value Any
 }
 
-func (p Pure) String() string {
-	return fmt.Sprintf("Pure %s", p.value)
-}
-
 // Throw Error
 type Throw struct {
 	Throw bool
 	err   error
-}
-
-func (t Throw) String() string {
-	return fmt.Sprintf("Throw %s", t.err)
 }
 
 // Catch (Aff a) (Error -> Aff a)
@@ -62,18 +29,10 @@ type Catch struct {
 	errorToAff func(Any) Any
 }
 
-func (c Catch) String() string {
-	return fmt.Sprintf("Catch %s", c.aff)
-}
-
 // Sync (Effect a)
 type Sync struct {
 	Sync bool
 	eff  func() Any
-}
-
-func (s Sync) String() string {
-	return fmt.Sprintf("Sync")
 }
 
 type AsyncCallback = func(Any) func()
@@ -86,19 +45,11 @@ type Async struct {
 	asyncFn AsyncFn
 }
 
-func (a Async) String() string {
-	return fmt.Sprintf("Async")
-}
-
 // forall b. Bind (Aff b) (b -> Aff a)
 type Bind struct {
 	Bind   bool
 	affOfB Any
 	bToAff func(Any) Any
-}
-
-func (b Bind) String() string {
-	return fmt.Sprintf("Bind %d", b.affOfB)
 }
 
 // forall b. Bracket (Aff b) (BracketConditions b) (b -> Aff a)
@@ -199,11 +150,11 @@ func nonCanceler(error Any) Any {
 }
 
 func runSync(left func(Any) Any, right func(Any) Any, eff func() Any) Any {
-	fmt.Println(Teal("func: runSync"))
+	// fmt.Println(Teal("func: runSync"))
 	var res Any
 	defer func() {
 		if err := recover(); err != nil {
-			fmt.Println("\tAn error, error: ", err)
+			// fmt.Println("\tAn error, error: ", err)
 			res = left(err)
 		}
 	}()
@@ -212,7 +163,7 @@ func runSync(left func(Any) Any, right func(Any) Any, eff func() Any) Any {
 }
 
 func runAsync(left func(Any) Any, eff AsyncFn, k AsyncCallback) Any {
-	fmt.Println(Teal("func: runAsync", k))
+	// fmt.Println(Teal("func: runAsync", k))
 	// catch...
 	var canceler Canceler = nonCanceler
 	defer func() {
@@ -334,7 +285,6 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 				func() {
 					defer func() {
 						if err := recover(); err != nil {
-							fmt.Println(Red("\tError oh shit ", err))
 							// early return on error
 							status = RETURN
 							fail = left(err)
@@ -350,7 +300,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 					}
 				}()
 			case STEP_RESULT:
-				fmt.Println("STEP_RESULT")
+				// fmt.Println("STEP_RESULT")
 				if isLeft(step).(bool) {
 					// early return on error
 					status = RETURN
@@ -359,20 +309,20 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 				} else if b.head == nil {
 					// happy case done
 					status = RETURN
-					fmt.Println("My work here is done")
+					// fmt.Println("My work here is done")
 				} else {
 					// happy case work left
 					status = STEP_BIND
 					step = fromRight(step)
-					fmt.Println("Next step after happy result", step)
+					// fmt.Println("Next step after happy result", step)
 				}
 
 			case CONTINUE:
-				fmt.Println("CONTINUE")
+				// fmt.Println("CONTINUE")
 				switch currentStep := step.(type) {
 
 				case Bind:
-					fmt.Println("\tBind")
+					// fmt.Println("\tBind")
 					if b.head != nil {
 						b.tail = &Cons{head: b.head, tail: b.tail}
 					}
@@ -381,27 +331,27 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 					step = currentStep.affOfB
 
 				case Pure:
-					fmt.Println("\tPure")
+					// fmt.Println("\tPure")
 					if b.head == nil {
 
-						fmt.Println("\t> Head nil")
+						// fmt.Println("\t> Head nil")
 						// we're done
 						status = RETURN
 						step = right(currentStep.value)
 					} else {
-						fmt.Println("\t> Head exists", currentStep.value)
+						// fmt.Println("\t> Head exists", currentStep.value)
 						// this happens after a bind
 						status = STEP_BIND
 						step = currentStep.value
 					}
 
 				case Sync:
-					fmt.Println("\tSync")
+					// fmt.Println("\tSync")
 					status = STEP_RESULT
 					step = runSync(left, right, currentStep.eff)
 
 				case Async:
-					fmt.Println("\tAsync")
+					// fmt.Println("\tAsync")
 					status = PENDING
 					step = runAsync(left, currentStep.asyncFn, func(theResult Any) func() {
 						return func() {
@@ -421,11 +371,11 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 							})
 						}
 					})
-					fmt.Println("\t\tNext step after Async", step)
+					// fmt.Println("\t\tNext step after Async", step)
 					return nil
 
 				case Throw:
-					fmt.Println("\tThrow")
+					// fmt.Println("\tThrow")
 					status = RETURN
 					fail = left(currentStep.err)
 					step = nil
@@ -433,7 +383,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 				case Catch:
 					fmt.Println("\tCatch", currentStep.aff)
 					if b.head == nil {
-						fmt.Println("\t\tHead is nil")
+						// fmt.Println("\t\tHead is nil")
 						attempts = &InterruptCons{interrupt: interrupt, head: step, tail: attempts}
 					} else {
 						fmt.Println("\t\tHead is not nil", b.head)
@@ -450,7 +400,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 					status = CONTINUE
 					step = currentStep.aff
 				case Bracket:
-					fmt.Println("\tBracket")
+					// fmt.Println("\tBracket")
 					bracketCount++
 					if b.head == nil {
 						attempts = &InterruptCons{head: step, tail: attempts, interrupt: interrupt}
@@ -463,7 +413,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 					step = currentStep.acquire
 
 				case Fork:
-					fmt.Println("\tFork")
+					// fmt.Println("\tFork")
 					status = STEP_RESULT
 					tmp = Fiber(util, supervisor, currentStep.affOfB)
 					if supervisor != nil {
@@ -474,7 +424,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 					}
 					step = right(tmp)
 				case Sequential:
-					fmt.Println("\tSequential")
+					// fmt.Println("\tSequential")
 					status = CONTINUE
 					step = sequential(util, supervisor, currentStep.parAff)
 
@@ -485,7 +435,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 				b.head = nil
 				b.tail = nil
 				if attempts == nil || attempts.head == nil {
-					fmt.Println("\tAttempts are nil", interrupt, fail)
+					// fmt.Println("\tAttempts are nil", interrupt, fail)
 					status = COMPLETED
 					if interrupt {
 						step = interrupt
@@ -493,26 +443,26 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 						step = fail
 					}
 				} else {
-					fmt.Println("\tAttempts aren't nil", attempts.head, attempts.tail)
+					// fmt.Println("\tAttempts aren't nil", attempts.head, attempts.tail)
 					tmp = attempts.interrupt
 					attempt = attempts.head
 					attempts = attempts.tail
 
 					switch currentAttempt := attempt.(type) {
 					case Catch:
-						fmt.Println("\tReturn Catch")
+						// fmt.Println("\tReturn Catch")
 						if interrupt && interrupt != tmp && bracketCount == 0 {
-							fmt.Println("\t\tGonna RETURN")
+							// fmt.Println("\t\tGonna RETURN")
 							status = RETURN
 						} else if fail != nil {
-							fmt.Println("\t\tGonna CONTINUE", fromLeft(fail), currentAttempt.errorToAff(fromLeft(fail)))
+							// fmt.Println("\t\tGonna CONTINUE", fromLeft(fail), currentAttempt.errorToAff(fromLeft(fail)))
 							status = CONTINUE
 							step = currentAttempt.errorToAff(fromLeft(fail))
 							fail = nil
 						}
 						// We cannot resume from an unmasked interrupt or exception.
 					case Resume:
-						fmt.Println("\tResume")
+						// fmt.Println("\tResume")
 						if interrupt && interrupt != tmp && bracketCount == 0 || fail != nil {
 							status = RETURN
 						} else {
@@ -524,7 +474,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 						}
 
 					case Bracket:
-						fmt.Println("\tBracket")
+						// fmt.Println("\tBracket")
 						bracketCount--
 						if fail == nil {
 							result = fromRight(step)
@@ -543,7 +493,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 							}
 						}
 					case Release:
-						fmt.Println("\tRelease")
+						// fmt.Println("\tRelease")
 						attempts = &InterruptCons{
 							head:      Finalized{step: step, fail: fail},
 							tail:      attempts,
@@ -564,7 +514,7 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 						fail = nil
 						bracketCount++
 					case Finalizer:
-						fmt.Println("\tFinalizer")
+						// fmt.Println("\tFinalizer")
 						bracketCount++
 						attempts.tail = attempts
 						attempts.head = Finalized{step: step, fail: fail}
@@ -572,17 +522,17 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 						status = CONTINUE
 						step = currentAttempt.finalizer
 					case Finalized:
-						fmt.Println("\tFinalized")
+						// fmt.Println("\tFinalized")
 						bracketCount--
 						status = RETURN
 						step = currentAttempt.step
 						fail = currentAttempt.fail
 					default:
-						fmt.Println(Fata("\tUnknown Attempt type hit", reflect.TypeOf(currentAttempt)))
+						break
 					}
 				}
 			case COMPLETED:
-				fmt.Println("COMPLETED", joins)
+				// fmt.Println("COMPLETED", joins)
 				for _, join := range joins {
 					if rethrow {
 						rethrow = join.rethrow
@@ -601,14 +551,14 @@ func Fiber(util_ Any, supervisor Any, aff_ Any) Dict {
 				return nil
 
 			case SUSPENDED:
-				fmt.Println("SUSPENDED")
+				// fmt.Println("SUSPENDED")
 				status = CONTINUE
 			case PENDING:
-				fmt.Println("PENDING")
+				// fmt.Println("PENDING")
 				return nil
 
 			default:
-				fmt.Println(Fata("Unknown branch hit", step))
+				break
 			}
 		}
 
@@ -655,7 +605,6 @@ func init() {
 	}
 	// ∷ ∀ a b. (a → b) → Aff a → Aff b
 	exports["_map"] = func(f_ Any) Any {
-		fmt.Println(Yellow("map"))
 		f := f_.(func(Any) Any)
 		return func(aff Any) Any {
 			switch a := aff.(type) {
@@ -672,7 +621,6 @@ func init() {
 
 	// ∷ ∀ a b. Aff a → (a → Aff b) → Aff b
 	exports["_bind"] = func(aff Any) Any {
-		fmt.Println(Yellow("bind"))
 		return func(f_ Any) Any {
 			f := f_.(func(Any) Any)
 			bToAff := func(b Any) Any { return f(b) }
