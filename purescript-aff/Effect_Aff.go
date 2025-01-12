@@ -805,17 +805,15 @@ func init() {
 	}
 
 	// ∷ ∀ a. ((Either Error a -> Effect Unit) -> Effect Canceler) -> Aff a
-	exports["makeAff"] = func(cb_ Any) Any {
-		return Async{
-			asyncFn: func(ac AsyncCallback) func() Canceler {
-				cb := cb_.(func(Any) Any)
-				res := cb(ac)
-				return func() Canceler {
-					funky := res.(func() Canceler)
-					return funky()
-				}
-			},
+	// exports["makeAff"] = func(asyncFn AsyncFn) Async { return Async{asyncFn: asyncFn} }
+	exports["makeAff"] = func(asyncFnAny Any) Any {
+		asyncFnFnAny := asyncFnAny.(func(Any) Any)
+		asyncFn := func(cb AsyncCallback) func() Canceler {
+			return func() Canceler {
+				return asyncFnFnAny(cb).(func() Canceler)()
+			}
 		}
+		return Async{asyncFn: asyncFn}
 	}
 
 	// ∀ a. Effect a → Aff a
@@ -850,35 +848,6 @@ func init() {
 		}
 		return Async{asyncFn: asyncFn}
 	}
-	// exports["_delay"] = func(right_ Any, millis_ Any) Any {
-
-	// 	//type AsyncCallback = func(Any) func()
-	// 	//type Canceler = Any
-	// 	//type AsyncFn = func(AsyncCallback) func() Canceler
-	// 	var asyncFn AsyncFn = func(asyncCb AsyncCallback) func() Canceler { // Updated Canceler signature
-	// 		return func() Any { // Canceler now takes an error
-	// 			right := right_.(func(Any) Any)
-	// 			var millis int = int(millis_.(float64))
-	// 			duration := time.Duration(millis) * time.Millisecond
-
-	// 			ctx, cancel := context.WithCancel(context.Background())
-
-	// 			// Perform the sleep operation
-	// 			go func() {
-	// 				select {
-	// 				case <-ctx.Done(): // Handle cancellation
-	// 				case <-time.After(duration): // Handle timeout
-	// 					asyncCb(right(nil))()
-	// 				}
-	// 			}()
-
-	// 			// Return a Canceler that cancels the context
-	// 			return right(func() { cancel() })
-	// 		}
-	// 	}
-
-	// 	return Async{asyncFn: asyncFn} // Correctly constructs the Async step
-	// }
 
 	exports["generalBracket"] = func(acquire Any) Any {
 		return func(options Any) Any {
