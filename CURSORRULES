@@ -1,0 +1,47 @@
+# Go-FFI Coding Conventions
+
+## Type Aliases and Usage
+- Use the provided `Any` type alias instead of `interface{}`
+- Use the provided `Dict` type alias instead of `map[string]Any` when dealing with PureScript records
+- Use `[]Any` for arrays
+
+## Parameter Naming Conventions
+1. For parameters used as-is (no type assertion needed):
+   - Use the parameter name without a trailing underscore
+   ```go
+   exports["foo"] = func(bar Any) Any {
+       return bar
+   }
+   ```
+
+2. For parameters requiring type assertion:
+   - Name the input parameter with a trailing underscore
+   - Create a type-inferred variable without the underscore
+   ```go
+   exports["foo"] = func(bar_ Any) Any {
+       bar := bar_.(int)
+       // ... rest of the code
+   }
+   ```
+
+ 3. To apply curried PureScript functions from within Go code use Apply it works for any arity
+   ```go
+    result := Apply(fn, arg1, arg2)
+   ```
+
+ 4. To run functions that return Effect use Run
+   ```go
+    result := Run(someEffect)
+   ```
+
+## PureScript to Go Type Mappings
+
+| PureScript Type | Go Type                    |
+|----------------|-----------------------------|
+| Array          | []Any                       |
+| String         | string                      |
+| Number         | float64                     |
+| Int            | int                         |
+| Char           | string (single UTF-8 entity)|
+| Boolean        | bool                        |
+| Records        | map[string]Any              | 

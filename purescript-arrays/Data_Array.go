@@ -352,4 +352,16 @@ func init() {
 		return false
 	}
 
+	//------------------------------------------------------------------------------
+	// Unfoldable ------------------------------------------------------------------
+	//------------------------------------------------------------------------------
+
+	exports["toUnfoldable"] = func(unfoldableDict Any) Any {
+		return func(arr Any) Any {
+			// For arrays, toUnfoldable just returns the array itself
+			// since arrays are already unfoldable
+			return arr
+		}
+	}
+
 }
