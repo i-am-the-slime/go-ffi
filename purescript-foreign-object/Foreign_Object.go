@@ -161,7 +161,6 @@ func init() {
 	}
 
 	exports["toArrayWithKey"] = func(f_ Any) Any {
-		fmt.Println("toArrayWithKey", f_)
 		return func(m_ Any) Any {
 			mDict, ok := m_.(Dict)
 			if !ok {

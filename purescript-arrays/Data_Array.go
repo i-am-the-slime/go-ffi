@@ -35,6 +35,25 @@ func init() {
 		}
 	}
 
+	exports["rangeImpl"] = func(start_ Any, end_ Any) Any {
+		start := start_.(int)
+		end := end_.(int)
+		var length int
+		var step int
+		if start > end {
+			length = start - end + 1
+			step = -1
+		} else {
+			length = end - start + 1
+			step = 1
+		}
+		ns := make([]Any, 0, length)
+		for i := start; i != end; i += step {
+			ns = append(ns, i)
+		}
+		return append(ns, end)
+	}
+
 	exports["replicate"] = func(count_ Any, value Any) Any {
 		var count = count_.(int)
 		if count < 1 {

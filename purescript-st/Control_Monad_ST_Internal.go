@@ -92,4 +92,15 @@ func init() {
 			}
 		}
 	}
+
+	exports["modifyImpl"] = func(f Any) Any {
+		return func(ref_ Any) Any {
+			return func() Any {
+				ref := ref_.(*Any)
+				t := Apply(f, *ref).(Dict)
+				*ref = t["state"]
+				return t["value"]
+			}
+		}
+	}
 }
