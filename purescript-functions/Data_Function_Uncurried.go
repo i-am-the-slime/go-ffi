@@ -41,6 +41,12 @@ func init() {
 		}
 	}
 
+	exports["mkFn8"] = func(fn Any) Any {
+		return func(a Any, b Any, c Any, d Any, e Any, f Any, g Any, h Any) Any {
+			return Apply(fn, a, b, c, d, e, f, g, h)
+		}
+	}
+
 	exports["runFn2"] = func(fn Any) Any {
 		return func(a Any) Any {
 			return func(b Any) Any {
@@ -117,6 +123,27 @@ func init() {
 								return func(g Any) Any {
 									h := fn.(Fn7)
 									return h(a, b, c, d, e, f, g)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	exports["runFn8"] = func(fn Any) Any {
+		return func(a Any) Any {
+			return func(b Any) Any {
+				return func(c Any) Any {
+					return func(d Any) Any {
+						return func(e Any) Any {
+							return func(f Any) Any {
+								return func(g Any) Any {
+									return func(h Any) Any {
+										i := fn.(Fn8)
+										return i(a, b, c, d, e, f, g, h)
+									}
 								}
 							}
 						}

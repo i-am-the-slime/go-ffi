@@ -15,7 +15,7 @@ func init() {
 
 	exports["mkEffectFn2"] = func(fn Any) Any {
 		return func(x Any, y Any) Any {
-				return Run(Apply(Apply(fn, x), y))
+			return Run(Apply(Apply(fn, x), y))
 		}
 	}
 

@@ -2,6 +2,7 @@ package purescript_aff
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	. "github.com/purescript-native/go-runtime"
@@ -86,18 +87,33 @@ type Finalized struct {
 type ParMap struct {
 	bToA      func(Any) Any
 	parAffOfB Any
+	result    Any // Memoized result
+}
+
+func (p ParMap) getResult() Any {
+	return p.result
 }
 
 // forall b. Apply (ParAff (b -> a)) (ParAff b)
 type ParApply struct {
 	parAffOfBToA Any
 	parAffOfB    Any
+	result       Any // Memoized result
+}
+
+func (p ParApply) getResult() Any {
+	return p.result
 }
 
 // Alt (ParAff a) (ParAff a)
 type ParAlt struct {
 	option1 Any
 	option2 Any
+	result  Any // Memoized result
+}
+
+func (p ParAlt) getResult() Any {
+	return p.result
 }
 
 type OnComplete struct {
@@ -137,6 +153,13 @@ func runAsync(
 	asyncFn Any, //  asyncFn :: (Either Error a -> Effect Unit) -> Effect Canceler
 	cb Any, //  cb       :: Either Error a -> Effect Unit
 ) Any {
+	if cb == nil {
+		panic("runAsync: callback is nil")
+	}
+	if asyncFn == nil {
+		panic("runAsync: asyncFn is nil")
+	}
+	
 	defer func() {
 		if err := recover(); err != nil {
 			fmt.Println("[runAsync] Caught panic:", err)
@@ -152,7 +175,6 @@ func runAsync(
 	fmt.Printf("[runAsync] asyncFn=%T, cb=%T\n", asyncFn, cb)
 
 	// 1) Partial application #1
-	fmt.Println("[runAsync] -- Attempting Apply(asyncFn, cb)...")
 	part := debugApply(asyncFn, cb)
 	if part == nil {
 		panic("[runAsync] Apply(asyncFn, cb) returned nil!")
@@ -175,9 +197,6 @@ func runAsync(
 }
 
 func debugApply(fn Any, arg Any) Any {
-	// Print the shapes
-	fmt.Printf("[debugApply] calling Apply(...) with fn=%T, arg=%T\n", fn, arg)
-
 	res := Apply(fn, arg)
 	switch x := res.(type) {
 	case nil:
@@ -208,9 +227,599 @@ func sequential(util Any, supervisor Any, par Any) Async {
 	}}
 }
 
+// Forked represents a leaf node in the parallel tree
+type Forked struct {
+	fid    int
+	resume *Cons // Stack to resume (head, tail)
+	result Any   // Memoized result (EMPTY if not yet resolved)
+}
+
+var EMPTY = struct{}{}
+
 func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
-	// TODO
-	panic("Implement parallel")
+	utilDict := util.(Dict)
+	isLeft := utilDict["isLeft"].(func(Any) Any)
+	fromRight := utilDict["fromRight"].(func(Any) Any)
+	left := utilDict["left"].(func(Any) Any)
+	right := utilDict["right"].(func(Any) Any)
+
+	// Mutable state - protected by mutex for thread safety
+	var mu sync.Mutex
+	fiberId := 0
+	fibers := make(map[int]Any)
+	killId := 0
+	kills := make(map[int]map[int]Any)
+	
+	// Early exit error for Alt cancellation
+	earlyExit := fmt.Errorf("[ParAff] Early exit")
+	
+	var interrupt Any = nil
+	var root Any = EMPTY
+
+	// kill cancels a subtree
+	var kill func(error Any, par Any, cb func(Any) func() Any) map[int]Any
+	kill = func(killError Any, par Any, cb func(Any) func() Any) map[int]Any {
+		step := par
+		var head Any = nil
+		var tail *Cons = nil
+		count := 0
+		killsMap := make(map[int]Any)
+		
+		for {
+			switch currentStep := step.(type) {
+			case *Forked:
+				if currentStep.result == EMPTY {
+					mu.Lock()
+					if fiber, ok := fibers[currentStep.fid]; ok {
+						idx := count
+						count++
+						fiberDict := fiber.(Dict)
+						killFn := fiberDict["kill"].(func(Any, Any) Any)
+						// Call killFn to get the effect, then call the effect to get the canceler
+						killEffect := killFn(killError, func(result Any) func() Any {
+							return func() Any {
+								mu.Lock()
+								count--
+								if count == 0 {
+									mu.Unlock()
+									cb(result)()
+								} else {
+									mu.Unlock()
+								}
+								return nil
+							}
+						})
+						// Execute the effect to get the canceler
+						if effectFn, ok := killEffect.(func() Any); ok {
+							killsMap[idx] = effectFn()
+						}
+					}
+					mu.Unlock()
+				}
+				
+				// Terminal case
+				if head == nil {
+					goto done
+				}
+				
+				// Go down the right side of the tree
+				switch h := head.(type) {
+				case *ParApply:
+					step = h.parAffOfB
+				case *ParAlt:
+					step = h.option2
+				default:
+					goto done
+				}
+				
+				// Move to next head from stack
+				if tail == nil {
+					head = nil
+				} else {
+					head = tail.head
+					tail = tail.tail
+				}
+				
+			case *ParMap:
+				step = currentStep.parAffOfB
+				
+			case *ParApply:
+				if head != nil {
+					tail = &Cons{head: head, tail: tail}
+				}
+				head = step
+				step = currentStep.parAffOfBToA
+				
+			case *ParAlt:
+				if head != nil {
+					tail = &Cons{head: head, tail: tail}
+				}
+				head = step
+				step = currentStep.option1
+			
+			default:
+				goto done
+			}
+		}
+		
+	done:
+		if count == 0 {
+			cb(right(nil))()
+		} else {
+			// Run all cancellation effects and store the resulting cancelers
+			for i := 0; i < count; i++ {
+				if cancelFn, ok := killsMap[i].(func() Any); ok {
+					killsMap[i] = cancelFn()
+				}
+			}
+		}
+		
+		return killsMap
+	}
+
+	// Helper to get result from Any type (reads result field which may be accessed by other goroutines)
+	// Note: results are write-once, so we can read without mutex after checking != EMPTY
+	getResult := func(node Any) Any {
+		switch n := node.(type) {
+		case *ParMap:
+			return n.result
+		case *ParApply:
+			return n.result
+		case *ParAlt:
+			return n.result
+		case *Forked:
+			return n.result
+		default:
+			return EMPTY
+		}
+	}
+
+	// join bubbles results back up the tree
+	var join func(result Any, head Any, tail *Cons)
+	join = func(result Any, head Any, tail *Cons) {
+		var fail Any
+		var step Any
+		
+		if isLeft(result).(bool) {
+			fail = result
+			step = nil
+		} else {
+			step = result
+			fail = nil
+		}
+		
+		for {
+			mu.Lock()
+			if interrupt != nil {
+				mu.Unlock()
+				return
+			}
+			mu.Unlock()
+			
+			// Reached root
+			if head == nil {
+				if fail != nil {
+					cb.(func(Any) func() Any)(fail)()
+				} else {
+					cb.(func(Any) func() Any)(step)()
+				}
+				return
+			}
+			
+			// Check if already computed (with double-checked locking)
+			if getResult(head) != EMPTY {
+				return
+			}
+			
+			switch h := head.(type) {
+			case *ParMap:
+				// Lock to prevent race when multiple fibers complete simultaneously
+				mu.Lock()
+				if h.result != EMPTY {
+					// Already computed by another fiber
+					mu.Unlock()
+					return
+				}
+				if fail == nil {
+					mapped := right(h.bToA(fromRight(step)))
+					h.result = mapped
+					step = mapped
+				} else {
+					h.result = fail
+				}
+				mu.Unlock()
+				
+			case *ParApply:
+				mu.Lock()
+				if h.result != EMPTY {
+					// Already computed by another fiber
+					mu.Unlock()
+					return
+				}
+				lhs := getResult(h.parAffOfBToA)
+				rhs := getResult(h.parAffOfB)
+				mu.Unlock()
+				
+				if fail != nil {
+					// Set result under lock
+					mu.Lock()
+					if h.result != EMPTY {
+						mu.Unlock()
+						return
+					}
+					h.result = fail
+					kid := killId
+					killId++
+					var toKill Any
+					if fail == lhs {
+						toKill = h.parAffOfB
+					} else {
+						toKill = h.parAffOfBToA
+					}
+					mu.Unlock()
+					
+					// Kill the other side (without holding mutex)
+					done := false
+					currentKid := kid
+					innerKills := kill(earlyExit, toKill, func(Any) func() Any {
+						return func() Any {
+							mu.Lock()
+							delete(kills, currentKid)
+							mu.Unlock()
+							if !done {
+								done = true
+								return nil
+							}
+							if tail == nil {
+								join(fail, nil, nil)
+							} else {
+								join(fail, tail.head, tail.tail)
+							}
+							return nil
+						}
+					})
+					
+					mu.Lock()
+					kills[currentKid] = innerKills
+					mu.Unlock()
+					
+					if done {
+						// Kill completed synchronously, callback will handle join
+						return
+					}
+					// Kill is pending, we return and wait for callback
+					return
+				} else if lhs == EMPTY || rhs == EMPTY {
+					// Can't proceed yet
+					return
+				} else {
+					// Apply the function
+					mu.Lock()
+					if h.result != EMPTY {
+						mu.Unlock()
+						return
+					}
+					fn := fromRight(lhs).(func(Any) Any)
+					arg := fromRight(rhs)
+					applied := right(fn(arg))
+					h.result = applied
+					step = applied
+					mu.Unlock()
+				}
+				
+			case *ParAlt:
+				mu.Lock()
+				if h.result != EMPTY {
+					// Already computed by another fiber
+					mu.Unlock()
+					return
+				}
+				lhs := getResult(h.option1)
+				rhs := getResult(h.option2)
+				mu.Unlock()
+				
+				// Wait for at least one side or both errors
+				if lhs == EMPTY && (rhs == EMPTY || !isLeft(rhs).(bool)) {
+					return
+				}
+				if rhs == EMPTY && (lhs == EMPTY || !isLeft(lhs).(bool)) {
+					return
+				}
+				
+				// Both errors - use first
+				if lhs != EMPTY && isLeft(lhs).(bool) && rhs != EMPTY && isLeft(rhs).(bool) {
+					mu.Lock()
+					if h.result != EMPTY {
+						mu.Unlock()
+						return
+					}
+					if step == lhs {
+						fail = rhs
+					} else {
+						fail = lhs
+					}
+					step = nil
+					h.result = fail
+					mu.Unlock()
+				} else {
+					// One succeeded - use it and kill the other
+					mu.Lock()
+					if h.result != EMPTY {
+						mu.Unlock()
+						return
+					}
+					h.result = step
+					kid := killId
+					killId++
+					var toKill Any
+					if step == lhs {
+						toKill = h.option2
+					} else {
+						toKill = h.option1
+					}
+					mu.Unlock()
+					
+					// Kill the other side (without holding mutex)
+					done := false
+					currentKid := kid
+					innerKills := kill(earlyExit, toKill, func(Any) func() Any {
+						return func() Any {
+							mu.Lock()
+							delete(kills, currentKid)
+							mu.Unlock()
+							if !done {
+								done = true
+								return nil
+							}
+							if tail == nil {
+								join(step, nil, nil)
+							} else {
+								join(step, tail.head, tail.tail)
+							}
+							return nil
+						}
+					})
+					
+					mu.Lock()
+					kills[currentKid] = innerKills
+					mu.Unlock()
+					
+					if done {
+						// Kill completed synchronously, callback will handle join
+						return
+					}
+					// Kill is pending, we return and wait for callback
+					return
+				}
+			}
+			
+			// Move up the tree
+			if tail == nil {
+				head = nil
+			} else {
+				head = tail.head
+				tail = tail.tail
+			}
+		}
+	}
+
+	// resolve creates completion handler for a fiber
+	resolve := func(forked *Forked) func(Any) func() Any {
+		return func(result Any) func() Any {
+			return func() Any {
+				mu.Lock()
+				delete(fibers, forked.fid)
+				forked.result = result
+				resumeHead := forked.resume.head
+				var resumeTail *Cons = nil
+				if forked.resume.tail != nil {
+					resumeTail = forked.resume.tail
+				}
+				mu.Unlock()
+				
+				join(result, resumeHead, resumeTail)
+				return nil
+			}
+		}
+	}
+
+	// run walks the parallel tree and forks fibers
+	run := func() {
+		const (
+			RUN_CONTINUE = 1
+			RUN_RETURN   = 2
+		)
+		
+		status := RUN_CONTINUE
+		step := par
+		var head Any = nil
+		var tail *Cons = nil
+		
+		for {
+			switch status {
+			case RUN_CONTINUE:
+				switch currentStep := step.(type) {
+				case ParMap:
+					if head != nil {
+						tail = &Cons{head: head, tail: tail}
+					}
+					head = &ParMap{bToA: currentStep.bToA, parAffOfB: EMPTY, result: EMPTY}
+					step = currentStep.parAffOfB
+					
+				case ParApply:
+					if head != nil {
+						tail = &Cons{head: head, tail: tail}
+					}
+					head = &ParApply{parAffOfBToA: EMPTY, parAffOfB: currentStep.parAffOfB, result: EMPTY}
+					step = currentStep.parAffOfBToA
+					
+				case ParAlt:
+					if head != nil {
+						tail = &Cons{head: head, tail: tail}
+					}
+					head = &ParAlt{option1: EMPTY, option2: currentStep.option2, result: EMPTY}
+					step = currentStep.option1
+					
+				default:
+					// Leaf node - create a fiber
+					mu.Lock()
+					fid := fiberId
+					fiberId++
+					mu.Unlock()
+					
+					forked := &Forked{
+						fid:    fid,
+						resume: &Cons{head: head, tail: tail},
+						result: EMPTY,
+					}
+					
+					fiber := Fiber(util, supervisor, step)
+					fiberDict := fiber.(Dict)
+					onCompleteFn := fiberDict["onComplete"].(func(OnComplete) func() Any)
+					onCompleteFn(OnComplete{
+						rethrow: false,
+						handler: resolve(forked),
+					})()
+					
+					mu.Lock()
+					fibers[fid] = fiber
+					mu.Unlock()
+					
+					if supervisor != nil {
+						supervisorDict := supervisor.(Dict)
+						registerFn := supervisorDict["register"].(func(Any))
+						registerFn(fiber)
+					}
+					
+					status = RUN_RETURN
+					step = forked
+				}
+				
+			case RUN_RETURN:
+				// Terminal case
+				if head == nil {
+					goto done
+				}
+				
+				// Fill in the left side
+				switch h := head.(type) {
+				case *ParMap:
+					if h.parAffOfB == EMPTY {
+						h.parAffOfB = step
+						status = RUN_CONTINUE
+						step = h.parAffOfB
+					} else {
+						step = head
+						if tail == nil {
+							head = nil
+						} else {
+							head = tail.head
+							tail = tail.tail
+						}
+					}
+					
+				case *ParApply:
+					if h.parAffOfBToA == EMPTY {
+						h.parAffOfBToA = step
+						status = RUN_CONTINUE
+						step = h.parAffOfB
+					} else {
+						h.parAffOfB = step
+						step = head
+						if tail == nil {
+							head = nil
+						} else {
+							head = tail.head
+							tail = tail.tail
+						}
+					}
+					
+				case *ParAlt:
+					if h.option1 == EMPTY {
+						h.option1 = step
+						status = RUN_CONTINUE
+						step = h.option2
+					} else {
+						h.option2 = step
+						step = head
+						if tail == nil {
+							head = nil
+						} else {
+							head = tail.head
+							tail = tail.tail
+						}
+					}
+				}
+			}
+		}
+		
+	done:
+		root = step
+		
+		// Start all fibers
+		mu.Lock()
+		fibersCopy := make(map[int]Any)
+		for k, v := range fibers {
+			fibersCopy[k] = v
+		}
+		mu.Unlock()
+		
+		for _, fiber := range fibersCopy {
+			fiberDict := fiber.(Dict)
+			runFn := fiberDict["run"].(func() Any)
+			runFn()
+		}
+	}
+
+	// cancel kills the entire tree
+	cancel := func(cancelError Any, cb func(Any) func() Any) Any {
+		mu.Lock()
+		interrupt = left(cancelError)
+		
+		// Cancel all pending kills
+		for _, innerKills := range kills {
+			for _, killFn := range innerKills {
+				if fn, ok := killFn.(func() Any); ok {
+					fn()
+				}
+			}
+		}
+		kills = make(map[int]map[int]Any)
+		mu.Unlock()
+		
+		newKills := kill(cancelError, root, cb)
+		
+		return func(killError Any) Any {
+			return Async{asyncFn: func(killCb Any) Any {
+				return func() Any {
+					for _, killFn := range newKills {
+						if fn, ok := killFn.(func() Any); ok {
+							fn()
+						}
+					}
+					return nonCanceler
+				}
+			}}
+		}
+	}
+
+	run()
+
+	// Return canceler
+	return func(killError Any) Any {
+		return Async{asyncFn: func(killCb Any) Any {
+			return func() Any {
+				return cancel(killError, func(result Any) func() Any {
+					return func() Any {
+						if kcb, ok := killCb.(func(Any) func() Any); ok {
+							kcb(result)()
+						}
+						return nil
+					}
+				})
+			}
+		}}
+	}
 }
 
 type Scheduler struct {
@@ -218,43 +827,167 @@ type Scheduler struct {
 	enqueue    func(cb func())
 }
 
-var scheduler Scheduler = (func() Scheduler {
-	const limit = 1024
-	size := 0
-	ix := 0
-	var queue [limit](func())
-	draining := false
-
-	drain := func() {
-		// fmt.Println("Draining...", size)
-		draining = true
-		for size != 0 {
-			size--
-			thunk := queue[ix]
-			ix = (ix + 1) % limit
-			thunk()
-		}
-		draining = false
+func SupervisorNew(util Any) Any {
+	utilDict := util.(Dict)
+	isLeft := utilDict["isLeft"].(func(Any) Any)
+	fromLeft := utilDict["fromLeft"].(func(Any) Any)
+	
+	var mu sync.Mutex
+	fibers := make(map[int]Any)
+	fiberId := 0
+	count := 0
+	
+	register := func(fiber Any) {
+		mu.Lock()
+		defer mu.Unlock()
+		
+		fid := fiberId
+		fiberId++
+		
+		fiberDict := fiber.(Dict)
+		onCompleteFn := fiberDict["onComplete"].(func(OnComplete) func() Any)
+		onCompleteFn(OnComplete{
+			rethrow: true,
+			handler: func(result Any) func() Any {
+				return func() Any {
+					mu.Lock()
+					defer mu.Unlock()
+					count--
+					delete(fibers, fid)
+					return nil
+				}
+			},
+		})()
+		
+		fibers[fid] = fiber
+		count++
 	}
-
-	isDraining := func() bool { return draining }
-	enqueue := func(cb func()) {
-		// fmt.Println("Enqueuing...")
-		if size == limit {
-			tmp := draining
-			drain()
-			draining = tmp
-		}
-		queue[(ix+size)%limit] = cb
-		size++
-
-		if !draining {
-			drain()
+	
+	isEmpty := func() Any {
+		mu.Lock()
+		defer mu.Unlock()
+		return count == 0
+	}
+	
+	killAll := func(killError Any, cb func()) func() Any {
+		return func() Any {
+			mu.Lock()
+			if count == 0 {
+				mu.Unlock()
+				cb()
+				return nil
+			}
+			
+			killCount := 0
+			kills := make(map[int]Any)
+			fibersCopy := make(map[int]Any)
+			for k, v := range fibers {
+				fibersCopy[k] = v
+			}
+			
+			// Clear state
+			fibers = make(map[int]Any)
+			fiberId = 0
+			count = 0
+			mu.Unlock()
+			
+			// Kill each fiber
+			for fid, fiber := range fibersCopy {
+				fiberDict := fiber.(Dict)
+				killFn := fiberDict["kill"].(func(Any, Any) Any)
+				
+				currentFid := fid
+				// killFn returns func() Any, which when called returns the canceler
+				killEffect := killFn(killError, func(result Any) func() Any {
+					return func() Any {
+						mu.Lock()
+						delete(kills, currentFid)
+						killCount--
+						if isLeft(result).(bool) && fromLeft(result) != nil {
+							err := fromLeft(result)
+							go func() {
+								time.Sleep(0)
+								panic(err)
+							}()
+						}
+						shouldCallback := killCount == 0
+						mu.Unlock()
+						
+						if shouldCallback {
+							cb()
+						}
+						return nil
+					}
+				})
+				// Call the effect to get the canceler
+				if killEffectFn, ok := killEffect.(func() Any); ok {
+					kills[currentFid] = killEffectFn()
+				}
+				// Increment killCount AFTER setting up the callback
+				// This ensures the callback can safely decrement it
+				mu.Lock()
+				killCount++
+				mu.Unlock()
+			}
+			
+			// Return canceler for the killAll operation
+			return func(error Any) Any {
+				return Sync{eff: func() Any {
+					mu.Lock()
+					defer mu.Unlock()
+					for _, killFn := range kills {
+						if fn, ok := killFn.(func() Any); ok {
+							fn()
+						}
+					}
+					return nil
+				}}
+			}
 		}
 	}
+	
+	return Dict{
+		"register": register,
+		"isEmpty":  isEmpty,
+		"killAll":  killAll,
+	}
+}
 
-	return Scheduler{isDraining: isDraining, enqueue: enqueue}
-})()
+// Thread-safe scheduler that queues work for the main thread
+var schedulerQueue []func()
+var schedulerMu sync.Mutex
+
+func schedulerEnqueue(cb func()) {
+	schedulerMu.Lock()
+	defer schedulerMu.Unlock()
+	schedulerQueue = append(schedulerQueue, cb)
+}
+
+func schedulerDrain() {
+	schedulerMu.Lock()
+	if len(schedulerQueue) == 0 {
+		schedulerMu.Unlock()
+		return
+	}
+	// Take all pending items
+	pending := schedulerQueue
+	schedulerQueue = nil
+	schedulerMu.Unlock()
+	
+	// Execute on main thread
+	for _, thunk := range pending {
+		thunk()
+	}
+}
+
+var scheduler Scheduler = Scheduler{
+	isDraining: func() bool {
+		schedulerMu.Lock()
+		defer schedulerMu.Unlock()
+		return len(schedulerQueue) > 0
+	},
+	enqueue: schedulerEnqueue,
+}
 
 func Fiber(util_ Any, supervisor Any, aff Any) Any {
 	var util Dict = util_.(Dict)
@@ -379,10 +1112,10 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					fmt.Println("\tAsync")
 					fmt.Printf("\tAsyncFn type: %T\n", currentStep.asyncFn)
 					status = PENDING
-					step = runAsync(left, currentStep.asyncFn, func(theResult Any) func() {
-						return func() {
+					step = runAsync(left, currentStep.asyncFn, func(theResult Any) func() Any {
+						return func() Any {
 							if runTick != localRunTick {
-								return
+								return nil
 							}
 							runTick++
 							scheduler.enqueue(func() {
@@ -393,6 +1126,7 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 								step = theResult
 								run(runTick)
 							})
+							return nil
 						}
 					})
 					return nil
@@ -661,6 +1395,9 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 	}
 	kill := func(error Any, cbAny Any) Any {
 		// fmt.Println("kill:")
+		if cbAny == nil {
+			panic("Fiber.kill: callback is nil")
+		}
 		cb := cbAny.(AsyncCallback)
 		return func() Any {
 			if status == COMPLETED {
@@ -836,20 +1573,29 @@ func init() {
 		millis := int(millis_.(float64))
 
 		return Async{asyncFn: func(cb Any) Any {
+			if cb == nil {
+				panic("_delay: callback is nil")
+			}
 			timer := time.NewTimer(time.Duration(millis) * time.Millisecond)
 
-			// Äquivalent zu setDelay(ms, cb(right()))
+			// Create the effect IMMEDIATELY (like JS: cb(right()))
+			effect := Apply(cb, right(nil))
+
+			// Enqueue to scheduler when timer fires (NOT Run() directly!)
 			go func() {
 				<-timer.C
-				Run(Apply(cb, right(nil)))
+				// Enqueue the effect to be run on main thread
+				schedulerEnqueue(func() {
+					Run(effect)
+				})
 			}()
 
-			// Äquivalent zu return function() { return Aff.Sync... }
+			// Return canceler
 			return func() Canceler {
 				return func(error Any) Any {
 					return Sync{eff: func() Any {
 						stopped := timer.Stop()
-						return right(stopped) // Geben wir zurück ob Timer gestoppt wurde, ähnlich wie clearTimeout
+						return right(stopped)
 					}}
 				}
 			}
@@ -870,9 +1616,86 @@ func init() {
 		}
 	}
 
+	// ∷ ∀ a. Boolean → Aff a → Aff (Fiber a)
+	exports["_fork"] = func(immediate Any) Any {
+		return func(aff Any) Any {
+			immediateBool := immediate.(bool)
+			return Fork{
+				questionableBool: immediateBool,
+				affOfB:           aff,
+			}
+		}
+	}
+
+	// ParAff map
+	exports["_parAffMap"] = func(f Any) Any {
+		return func(parAff Any) Any {
+			return ParMap{
+				bToA:      f.(func(Any) Any),
+				parAffOfB: parAff,
+				result:    EMPTY,
+			}
+		}
+	}
+
+	// ParAff apply
+	exports["_parAffApply"] = func(parAff1 Any) Any {
+		return func(parAff2 Any) Any {
+			return ParApply{
+				parAffOfBToA: parAff1,
+				parAffOfB:    parAff2,
+				result:       EMPTY,
+			}
+		}
+	}
+
+	// ParAff alt
+	exports["_parAffAlt"] = func(parAff1 Any) Any {
+		return func(parAff2 Any) Any {
+			return ParAlt{
+				option1: parAff1,
+				option2: parAff2,
+				result:  EMPTY,
+			}
+		}
+	}
+
 	// ParAff ~> Aff
-	exports["_sequential"] = func(oldAff Any) Any {
-		return oldAff
+	exports["_sequential"] = func(par Any) Any {
+		return Sequential{parAff: par}
+	}
+
+	// ∷ ∀ a. Fn.Fn2 FFIUtil (Aff a) (Effect { fiber :: Fiber a, supervisor :: Supervisor })
+	exports["_makeSupervisedFiber"] = func(util Any, aff Any) Any {
+		return func() Any {
+			supervisor := SupervisorNew(util)
+			fiber := Fiber(util, supervisor, aff)
+			return Dict{
+				"fiber":      fiber,
+				"supervisor": supervisor,
+			}
+		}
+	}
+
+	// ∷ ∀ a. Fn.Fn3 Error Supervisor (Effect Unit) (Effect (Canceler))
+	exports["_killAll"] = func(error Any, supervisor Any, cb Any) Any {
+		supervisorDict := supervisor.(Dict)
+		killAllFn := supervisorDict["killAll"].(func(Any, func()) func() Any)
+		cbFunc := cb.(func() Any)
+		return killAllFn(error, func() {
+			cbFunc()
+		})
+	}
+
+	exports["nonCanceler"] = nonCanceler
+
+	// _drainScheduler :: Effect Unit
+	// Process queued async effects on the main thread (call this every frame!)
+	exports["_drainScheduler"] = func() Any {
+		return func() Any {
+			schedulerDrain()
+			return nil
+		}
 	}
 
 }
