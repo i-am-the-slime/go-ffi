@@ -8,6 +8,24 @@ import (
 	. "github.com/purescript-native/go-runtime"
 )
 
+// Re-export types for clarity
+type Effect = EffFn // Effect is func() Any
+
+// Internal queue for goroutines to schedule effects on main thread
+var effectQueue = make(chan EffFn, 100)
+
+// DrainEffectQueue processes any pending effects (call from main thread/loop)
+func DrainEffectQueue() {
+	for {
+		select {
+		case eff := <-effectQueue:
+			Run(eff)
+		default:
+			return
+		}
+	}
+}
+
 // Pure a
 type Pure struct {
 	value Any
@@ -159,56 +177,16 @@ func runAsync(
 	if asyncFn == nil {
 		panic("runAsync: asyncFn is nil")
 	}
-	
-	defer func() {
-		if err := recover(); err != nil {
-			fmt.Println("[runAsync] Caught panic:", err)
-			msg := fmt.Sprintf("Error in runAsync: %v", err)
-			// Optionally call cb(left(err)) here:
-			if cbFunc, ok := cb.(func(Any) func() Any); ok {
-				cbFunc(left(err))()
-			}
-			panic(msg)
-		}
-	}()
 
-	fmt.Printf("[runAsync] asyncFn=%T, cb=%T\n", asyncFn, cb)
-
-	// 1) Partial application #1
-	part := debugApply(asyncFn, cb)
+	// Apply asyncFn to cb, returning an Effect Canceler
+	part := Apply(asyncFn, cb)
 	if part == nil {
 		panic("[runAsync] Apply(asyncFn, cb) returned nil!")
 	}
-	fmt.Printf("[runAsync]    => part result: %T %+v\n", part, part)
 
-	// 2) Now we expect part is an Effect Canceler => a zero-arg function
-	fmt.Println("[runAsync] -- Type-asserting part as func() Any")
-	effFunc, ok := part.(func() Any)
-	if !ok {
-		panic("[runAsync] part is not func() Any (Effect Canceler).")
-	}
-
-	// 3) Call it
-	fmt.Println("[runAsync] -- Calling the zero-arg function.")
-	result := effFunc()
-	fmt.Printf("[runAsync]    => effFunc() result: %T %+v\n", result, result)
-
+	// Run the Effect to get the Canceler
+	result := Run(part)
 	return result
-}
-
-func debugApply(fn Any, arg Any) Any {
-	res := Apply(fn, arg)
-	switch x := res.(type) {
-	case nil:
-		fmt.Println("[debugApply] result => nil!")
-	case func() Any:
-		fmt.Printf("[debugApply] result => zero-arg function func() Any\n")
-	case func(Any) Any:
-		fmt.Printf("[debugApply] result => one-arg function func(Any) Any\n")
-	default:
-		fmt.Printf("[debugApply] result => some other type: %T\n", x)
-	}
-	return res
 }
 
 // function sequential(util, supervisor, par) {
@@ -764,11 +742,11 @@ func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
 		}
 		mu.Unlock()
 		
-		for _, fiber := range fibersCopy {
-			fiberDict := fiber.(Dict)
-			runFn := fiberDict["run"].(func() Any)
-			runFn()
-		}
+	for _, fiber := range fibersCopy {
+		fiberDict := fiber.(Dict)
+		runFn := fiberDict["run"].(func() interface{})
+		Run(runFn)
+	}
 	}
 
 	// cancel kills the entire tree
@@ -820,11 +798,6 @@ func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
 			}
 		}}
 	}
-}
-
-type Scheduler struct {
-	isDraining func() bool
-	enqueue    func(cb func())
 }
 
 func SupervisorNew(util Any) Any {
@@ -953,41 +926,6 @@ func SupervisorNew(util Any) Any {
 	}
 }
 
-// Thread-safe scheduler that queues work for the main thread
-var schedulerQueue []func()
-var schedulerMu sync.Mutex
-
-func schedulerEnqueue(cb func()) {
-	schedulerMu.Lock()
-	defer schedulerMu.Unlock()
-	schedulerQueue = append(schedulerQueue, cb)
-}
-
-func schedulerDrain() {
-	schedulerMu.Lock()
-	if len(schedulerQueue) == 0 {
-		schedulerMu.Unlock()
-		return
-	}
-	// Take all pending items
-	pending := schedulerQueue
-	schedulerQueue = nil
-	schedulerMu.Unlock()
-	
-	// Execute on main thread
-	for _, thunk := range pending {
-		thunk()
-	}
-}
-
-var scheduler Scheduler = Scheduler{
-	isDraining: func() bool {
-		schedulerMu.Lock()
-		defer schedulerMu.Unlock()
-		return len(schedulerQueue) > 0
-	},
-	enqueue: schedulerEnqueue,
-}
 
 func Fiber(util_ Any, supervisor Any, aff Any) Any {
 	var util Dict = util_.(Dict)
@@ -1114,19 +1052,22 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					status = PENDING
 					step = runAsync(left, currentStep.asyncFn, func(theResult Any) func() Any {
 						return func() Any {
-							if runTick != localRunTick {
-								return nil
-							}
-							runTick++
-							scheduler.enqueue(func() {
-								if runTick != localRunTick+1 {
-									return
-								}
-								status = STEP_RESULT
-								step = theResult
-								run(runTick)
-							})
+					if runTick != localRunTick {
+						return nil
+					}
+					runTick++
+					// Create Effect with explicit type and enqueue it
+					var eff EffFn = func() Any {
+						if runTick != localRunTick+1 {
 							return nil
+						}
+						status = STEP_RESULT
+						step = theResult
+						run(runTick)
+						return nil
+					}
+					Run(eff)
+					return nil
 						}
 					})
 					return nil
@@ -1169,17 +1110,16 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					status = CONTINUE
 					step = currentStep.acquire
 
-				case Fork:
-					// fmt.Println("\tFork")
-					status = STEP_RESULT
-					tmp = Fiber(util, supervisor, currentStep.affOfB)
-					if supervisor != nil {
-						supervisor.(Dict)["register"].(func(Any))(tmp)
-					}
-					if currentStep.questionableBool {
-						tmp.(Dict)["run"].(func())()
-					}
-					step = util["right"].(func(Any) Any)(tmp)
+			case Fork:
+				status = STEP_RESULT
+				tmp = Fiber(util, supervisor, currentStep.affOfB)
+			if supervisor != nil {
+				supervisor.(Dict)["register"].(func(Any))(tmp)
+			}
+			if currentStep.questionableBool {
+				Run(tmp.(Dict)["run"].(func() interface{}))
+			}
+			step = util["right"].(func(Any) Any)(tmp)
 				case Sequential:
 					// fmt.Println("\tSequential")
 					status = CONTINUE
@@ -1306,13 +1246,13 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					rethrow = rethrow && join.rethrow
 					join.handler(step)()
 				}
-				joins = nil
-				if (interrupt != nil) && fail != nil {
-					go panic(fromLeft(fail))
-				} else if isLeft(step).(bool) && rethrow {
-					go panic(fromLeft(step))
-				}
-				return nil
+			joins = nil
+			if (interrupt != nil) && fail != nil {
+				panic(fromLeft(fail))
+			} else if isLeft(step).(bool) && rethrow {
+				panic(fromLeft(step))
+			}
+			return nil
 
 			case SUSPENDED:
 				// fmt.println("SUSPENDED")
@@ -1329,13 +1269,8 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 	}
 	runFn := func() Any {
 		if status == SUSPENDED {
-			if !scheduler.isDraining() {
-				scheduler.enqueue(func() {
-					run(runTick)
-				})
-			} else {
-				run(runTick)
-			}
+			// Just run directly - no need for scheduler in Go
+			run(runTick)
 		}
 		return nil // Important to avoid panic
 	}
@@ -1383,10 +1318,10 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 		}
 	}
 
-	join := func(cb func(Any) func() Any) func() Any {
-
+	join := func(cb Any) Any {
 		return func() Any {
-			canceler := onComplete(OnComplete{rethrow: false, handler: cb})()
+			cbFn := cb.(func(Any) func() Any)
+			canceler := onComplete(OnComplete{rethrow: false, handler: cbFn})()
 			if status == SUSPENDED {
 				run(runTick)
 			}
@@ -1577,18 +1512,17 @@ func init() {
 				panic("_delay: callback is nil")
 			}
 			timer := time.NewTimer(time.Duration(millis) * time.Millisecond)
+			
+			// Construct the result and Effect on main thread BEFORE goroutine starts
+			result := right(nil)
+			effectToRun := Apply(cb, result)
 
-			// Create the effect IMMEDIATELY (like JS: cb(right()))
-			effect := Apply(cb, right(nil))
-
-			// Enqueue to scheduler when timer fires (NOT Run() directly!)
-			go func() {
-				<-timer.C
-				// Enqueue the effect to be run on main thread
-				schedulerEnqueue(func() {
-					Run(effect)
-				})
-			}()
+		// Goroutine waits, then queues the pre-constructed effect for main thread
+		go func() {
+			<-timer.C
+			// Queue the effect for main thread to run
+			effectQueue <- effectToRun.(EffFn)
+		}()
 
 			// Return canceler
 			return func() Canceler {
@@ -1688,12 +1622,11 @@ func init() {
 	}
 
 	exports["nonCanceler"] = nonCanceler
-
-	// _drainScheduler :: Effect Unit
-	// Process queued async effects on the main thread (call this every frame!)
-	exports["_drainScheduler"] = func() Any {
+	
+	// Internal function to process queued effects from goroutines
+	exports["drainEffectQueueImpl"] = func() Any {
 		return func() Any {
-			schedulerDrain()
+			DrainEffectQueue()
 			return nil
 		}
 	}
