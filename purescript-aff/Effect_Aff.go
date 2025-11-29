@@ -26,6 +26,17 @@ func DrainEffectQueue() {
 	}
 }
 
+// QueueEffect queues an effect to be run on the main thread (call from goroutines)
+func QueueEffect(eff EffFn) {
+	effectQueue <- eff
+}
+
+// MakeAsync creates an Async Aff from an asyncFn
+// This is a helper for FFI code in other packages that can't access the unexported asyncFn field
+func MakeAsync(asyncFn AsyncFn) Async {
+	return Async{asyncFn: asyncFn}
+}
+
 // Pure a
 type Pure struct {
 	value Any
@@ -177,7 +188,7 @@ func runAsync(
 	if asyncFn == nil {
 		panic("runAsync: asyncFn is nil")
 	}
-
+	
 	// Apply asyncFn to cb, returning an Effect Canceler
 	part := Apply(asyncFn, cb)
 	if part == nil {
@@ -645,6 +656,7 @@ func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
 					fiberId++
 					mu.Unlock()
 					
+					
 					forked := &Forked{
 						fid:    fid,
 						resume: &Cons{head: head, tail: tail},
@@ -684,8 +696,15 @@ func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
 				case *ParMap:
 					if h.parAffOfB == EMPTY {
 						h.parAffOfB = step
-						status = RUN_CONTINUE
-						step = h.parAffOfB
+						// ParMap only has one child, so we're done with this node
+						step = head
+						status = RUN_RETURN
+						if tail == nil {
+							head = nil
+						} else {
+							head = tail.head
+							tail = tail.tail
+						}
 					} else {
 						step = head
 						if tail == nil {
@@ -734,6 +753,7 @@ func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
 	done:
 		root = step
 		
+		
 		// Start all fibers
 		mu.Lock()
 		fibersCopy := make(map[int]Any)
@@ -742,11 +762,11 @@ func runPar(util Any, supervisor Any, par Any, cb Any) Canceler {
 		}
 		mu.Unlock()
 		
-	for _, fiber := range fibersCopy {
-		fiberDict := fiber.(Dict)
-		runFn := fiberDict["run"].(func() interface{})
-		Run(runFn)
-	}
+		for _, fiber := range fibersCopy {
+			fiberDict := fiber.(Dict)
+			runFn := fiberDict["run"].(func() interface{})
+			Run(runFn)
+		}
 	}
 
 	// cancel kills the entire tree
@@ -1052,22 +1072,22 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					status = PENDING
 					step = runAsync(left, currentStep.asyncFn, func(theResult Any) func() Any {
 						return func() Any {
-					if runTick != localRunTick {
-						return nil
-					}
-					runTick++
+							if runTick != localRunTick {
+								return nil
+							}
+							runTick++
 					// Create Effect with explicit type and enqueue it
 					var eff EffFn = func() Any {
-						if runTick != localRunTick+1 {
+								if runTick != localRunTick+1 {
 							return nil
-						}
-						status = STEP_RESULT
-						step = theResult
-						run(runTick)
+								}
+								status = STEP_RESULT
+								step = theResult
+								run(runTick)
 						return nil
 					}
 					Run(eff)
-					return nil
+							return nil
 						}
 					})
 					return nil
@@ -1110,16 +1130,18 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					status = CONTINUE
 					step = currentStep.acquire
 
-			case Fork:
-				status = STEP_RESULT
-				tmp = Fiber(util, supervisor, currentStep.affOfB)
-			if supervisor != nil {
-				supervisor.(Dict)["register"].(func(Any))(tmp)
-			}
-			if currentStep.questionableBool {
-				Run(tmp.(Dict)["run"].(func() interface{}))
-			}
-			step = util["right"].(func(Any) Any)(tmp)
+				case Fork:
+					status = STEP_RESULT
+					tmp = Fiber(util, supervisor, currentStep.affOfB)
+					if supervisor != nil {
+						supervisor.(Dict)["register"].(func(Any))(tmp)
+					}
+					if currentStep.questionableBool {
+			// Just run the fiber immediately on the same thread
+			// Go channels in the shell command will handle the async part
+			Run(tmp.(Dict)["run"].(func() interface{}))
+					}
+					step = util["right"].(func(Any) Any)(tmp)
 				case Sequential:
 					// fmt.Println("\tSequential")
 					status = CONTINUE
@@ -1246,13 +1268,13 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 					rethrow = rethrow && join.rethrow
 					join.handler(step)()
 				}
-			joins = nil
-			if (interrupt != nil) && fail != nil {
+				joins = nil
+				if (interrupt != nil) && fail != nil {
 				panic(fromLeft(fail))
-			} else if isLeft(step).(bool) && rethrow {
+				} else if isLeft(step).(bool) && rethrow {
 				panic(fromLeft(step))
-			}
-			return nil
+				}
+				return nil
 
 			case SUSPENDED:
 				// fmt.println("SUSPENDED")
@@ -1270,7 +1292,7 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 	runFn := func() Any {
 		if status == SUSPENDED {
 			// Just run directly - no need for scheduler in Go
-			run(runTick)
+				run(runTick)
 		}
 		return nil // Important to avoid panic
 	}
@@ -1318,7 +1340,8 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 		}
 	}
 
-	join := func(cb Any) Any {
+	// Original join implementation
+	joinImpl := func(cb Any) Any {
 		return func() Any {
 			cbFn := cb.(func(Any) func() Any)
 			canceler := onComplete(OnComplete{rethrow: false, handler: cbFn})()
@@ -1328,6 +1351,9 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 			return canceler
 		}
 	}
+	
+	// Will be set to joinImpl or wrapped version depending on fork mode
+	var join func(Any) Any
 	kill := func(error Any, cbAny Any) Any {
 		// fmt.Println("kill:")
 		if cbAny == nil {
@@ -1402,13 +1428,18 @@ func Fiber(util_ Any, supervisor Any, aff Any) Any {
 			return canceler
 		}
 	}
-	return Dict{
+	// Default: use the normal join implementation
+	join = joinImpl
+	
+	fiber := Dict{
 		"run":         runFn,
 		"kill":        kill,
 		"join":        join,
 		"onComplete":  onComplete,
 		"isSuspended": func() Any { return status == SUSPENDED },
 	}
+	
+	return fiber
 }
 
 func init() {
@@ -1511,18 +1542,25 @@ func init() {
 			if cb == nil {
 				panic("_delay: callback is nil")
 			}
-			timer := time.NewTimer(time.Duration(millis) * time.Millisecond)
 			
-			// Construct the result and Effect on main thread BEFORE goroutine starts
-			result := right(nil)
-			effectToRun := Apply(cb, result)
+			// Capture these on the main thread before goroutine
+			cbCopy := cb
+			rightCopy := right
+			
+			// Start timer
+			timer := time.NewTimer(time.Duration(millis) * time.Millisecond)
 
-		// Goroutine waits, then queues the pre-constructed effect for main thread
-		go func() {
-			<-timer.C
-			// Queue the effect for main thread to run
-			effectQueue <- effectToRun.(EffFn)
-		}()
+			// Spawn goroutine that waits then queues the callback invocation
+			go func() {
+				<-timer.C
+				// Queue an effect that will call the callback on the main thread
+				effectQueue <- func() Any {
+					// Now on main thread - safe to Apply and Run
+					result := rightCopy(nil)
+					effect := Apply(cbCopy, result)
+					return Run(effect.(func() Any))
+				}
+			}()
 
 			// Return canceler
 			return func() Canceler {
