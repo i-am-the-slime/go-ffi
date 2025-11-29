@@ -348,6 +348,22 @@ func init() {
 		return result
 	}
 
+	// foreign import zipWithImpl :: forall a b c. Fn3 (a -> b -> c) (Array a) (Array b) (Array c)
+	exports["zipWithImpl"] = func(f_ Any, xs_ Any, ys_ Any) Any {
+		xs := xs_.([]Any)
+		ys := ys_.([]Any)
+		lxs := len(xs)
+		l := len(ys)
+		if lxs < l {
+			l = lxs
+		}
+		result := make([]Any, 0, l)
+		for i := 0; i < l; i++ {
+			result = append(result, Apply(f_, xs[i], ys[i]))
+		}
+		return result
+	}
+
 	//------------------------------------------------------------------------------
 	// Partial ---------------------------------------------------------------------
 	//------------------------------------------------------------------------------
