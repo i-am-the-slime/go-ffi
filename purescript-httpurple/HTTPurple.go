@@ -27,14 +27,19 @@ func init() {
 					// Call router to get response
 					responseFn := router(req)
 					
-					// Execute the response monad
+					var response Any
+					
+					// Execute the response monad if it's an effect
 					if respEffect, ok := responseFn.(func() Any); ok {
-						response := respEffect()
-						
-						// Apply the response
-						if resp, ok := response.(Dict); ok {
-							applyResponse(w, resp)
-						}
+						response = respEffect()
+					} else {
+						// Direct response (not wrapped in Effect)
+						response = responseFn
+					}
+					
+					// Apply the response
+					if resp, ok := response.(Dict); ok {
+						applyResponse(w, resp)
 					}
 				}),
 			}
