@@ -7,6 +7,7 @@ import (
 )
 
 func init() {
+	fmt.Println("[DEBUG] Initializing Effect.Exception FFI")
 	exports := Foreign("Effect.Exception")
 
 	// Error type - represented as a dict with message and stack
@@ -83,6 +84,7 @@ func init() {
 
 	// catchException :: forall a. (Error -> Effect a) -> Effect a -> Effect a
 	exports["catchException"] = func(handler_ Any, effect_ Any) Any {
+		fmt.Printf("[DEBUG] catchException called, handler type: %T, effect type: %T\n", handler_, effect_)
 		return func() Any {
 			handler := handler_.(func(Any) Any)
 			effect := effect_.(func() Any)
