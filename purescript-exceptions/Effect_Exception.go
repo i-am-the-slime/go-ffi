@@ -7,7 +7,6 @@ import (
 )
 
 func init() {
-	fmt.Println("[DEBUG] Initializing Effect.Exception FFI")
 	exports := Foreign("Effect.Exception")
 
 	// Error type - represented as a dict with message and stack
@@ -35,14 +34,19 @@ func init() {
 		return fmt.Sprintf("%v", err_)
 	}
 
-	// stack :: Error -> Maybe String
-	exports["stack"] = func(err_ Any) Any {
-		if err, ok := err_.(Dict); ok {
-			if stack, ok := err["stack"].(string); ok && stack != "" {
-				return Dict{"value0": stack} // Just
+	// stackImpl :: (forall a. a -> Maybe a) -> (forall a. Maybe a) -> Error -> Maybe String
+	// Takes Just and Nothing constructors, then Error
+	exports["stackImpl"] = func(just Any) Any {
+		return func(nothing Any) Any {
+			return func(err_ Any) Any {
+				if err, ok := err_.(Dict); ok {
+					if stack, ok := err["stack"].(string); ok && stack != "" {
+						return Apply(just, stack)
+					}
+				}
+				return nothing
 			}
 		}
-		return Dict{} // Nothing
 	}
 
 	// throwException :: forall a. Error -> Effect a
@@ -83,52 +87,57 @@ func init() {
 	}
 
 	// catchException :: forall a. (Error -> Effect a) -> Effect a -> Effect a
-	exports["catchException"] = func(handler_ Any, effect_ Any) Any {
-		fmt.Printf("[DEBUG] catchException called, handler type: %T, effect type: %T\n", handler_, effect_)
-		return func() Any {
-			handler := handler_.(func(Any) Any)
-			effect := effect_.(func() Any)
-			
-			// Catch panics and handle them
-			var result Any
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						// Convert panic to error
-						var err Dict
-						if e, ok := r.(Dict); ok {
-							err = e
-						} else {
-							err = Dict{
-								"message": fmt.Sprintf("%v", r),
-								"stack":   "",
+	// Must be curried! PureScript calls it as: catchException(handler)(effect)
+	exports["catchException"] = func(handler_ Any) Any {
+		return func(effect_ Any) Any {
+			return func() Any {
+				handler := handler_.(func(Any) Any)
+				effect := effect_.(func() Any)
+				
+				// Catch panics and handle them
+				var result Any
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							// Convert panic to error
+							var err Dict
+							if e, ok := r.(Dict); ok {
+								err = e
+							} else {
+								err = Dict{
+									"message": fmt.Sprintf("%v", r),
+									"stack":   "",
+								}
 							}
+							
+							// Call handler
+							handlerEffect := handler(err).(func() Any)
+							result = handlerEffect()
 						}
-						
-						// Call handler
-						handlerEffect := handler(err).(func() Any)
-						result = handlerEffect()
-					}
+					}()
+					
+					result = effect()
 				}()
 				
-				result = effect()
-			}()
-			
-			return result
+				return result
+			}
 		}
 	}
 
 	// finally :: forall a. Effect Unit -> Effect a -> Effect a
-	exports["finally"] = func(finalizer_ Any, effect_ Any) Any {
-		return func() Any {
-			finalizer := finalizer_.(func() Any)
-			effect := effect_.(func() Any)
-			
-			defer func() {
-				finalizer()
-			}()
-			
-			return effect()
+	// Must be curried!
+	exports["finally"] = func(finalizer_ Any) Any {
+		return func(effect_ Any) Any {
+			return func() Any {
+				finalizer := finalizer_.(func() Any)
+				effect := effect_.(func() Any)
+				
+				defer func() {
+					finalizer()
+				}()
+				
+				return effect()
+			}
 		}
 	}
 }
